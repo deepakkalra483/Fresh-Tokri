@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Production Build output
+dist/
+dist-ssr/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local Env
+.env.local
+
+# Vercel
+.vercel/

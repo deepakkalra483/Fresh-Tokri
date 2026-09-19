@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fresh Tokri - Modern Grocery Delivery UI Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #0f172a;
+      color: #0f172a;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Device Frame Styling */
+    .phone-container {
+      width: 100%;
+      max-width: 412px;
+      height: 870px;
+      background: #f8fafc;
+      border-radius: 44px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 12px #1e293b;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    @media (max-width: 480px) {
+      .phone-container {
+        max-width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .desktop-bg {
+        padding: 0 !important;
+        background: #ffffff !important;
+      }
+    }
+    
+    /* Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 3px;
+      height: 3px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    /* Glassmorphism & UI Accents */
+    .glass-nav {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .glass-dark {
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(12px);
+    }
+    
+    /* Gradient Badges & Buttons */
+    .grad-instant {
+      background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+    }
+    .grad-morning {
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    }
+    .grad-gold {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+    .grad-banner-morning {
+      background: linear-gradient(135deg, #064e3b 0%, #047857 50%, #059669 100%);
+    }
+    .grad-banner-instant {
+      background: linear-gradient(135deg, #881337 0%, #be123c 50%, #e11d48 100%);
+    }
+
+    /* Pulse effects */
+    .pulse-ring {
+      animation: pulseRing 2s infinite;
+    }
+    @keyframes pulseRing {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* Smooth transition for mode tabs */
+    .mode-tab-active {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+  </style>
+</head>
+<body class="desktop-bg min-h-screen flex flex-col items-center justify-center p-0 md:p-6">
+
+  <!-- Desktop Header Controls -->
+  <div class="hidden md:flex items-center justify-between w-full max-w-[412px] mb-3 text-white">
+    <div class="flex items-center gap-2">
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+      <h1 class="text-xs font-bold tracking-wider text-slate-200 uppercase">Fresh Tokri • Modern Figma Inspired UI</h1>
+    </div>
+    <div class="text-[11px] bg-slate-800 text-emerald-400 px-3 py-1 rounded-full border border-slate-700 font-medium">
+      Compact High-Density View
+    </div>
+  </div>
+
+  <!-- Mobile Phone Shell Container -->
+  <div class="phone-container relative">
+    
+    <!-- Mobile Status Bar -->
+    <div class="bg-white text-slate-900 text-xs px-6 pt-3 pb-1 flex justify-between items-center select-none z-50">
+      <span class="font-extrabold text-[11px]">9:41</span>
+      <div class="w-16 h-3.5 bg-slate-900 rounded-full mx-auto"></div>
+      <div class="flex items-center gap-1.5 text-[10px] text-slate-700">
+        <i class="fas fa-signal"></i>
+        <i class="fas fa-wifi"></i>
+        <i class="fas fa-battery-full text-xs"></i>
+      </div>
+    </div>
+
+    <!-- MAIN SCROLLABLE APP CONTAINER -->
+    <div id="app-screen" class="flex-1 overflow-y-auto custom-scrollbar flex flex-col bg-slate-100/70 relative pb-20">
+
+      <!-- APP STICKY HEADER -->
+      <header class="bg-white sticky top-0 z-30 shadow-xs border-b border-slate-100">
+        
+        <!-- Location & User Profile Bar -->
+        <div class="px-3.5 pt-2.5 pb-2 flex items-center justify-between">
+          <div class="flex items-center gap-2 cursor-pointer" onclick="openAddressModal()">
+            <div class="w-7 h-7 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shadow-2xs">
+              <i class="fas fa-location-dot text-xs"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-1">
+                <span class="text-xs font-extrabold text-slate-900">Delivery to Home</span>
+                <i class="fas fa-chevron-down text-[9px] text-slate-400"></i>
+              </div>
+              <p class="text-[10px] text-slate-500 font-medium truncate max-w-[180px]">Flat 402, Sector 62, Mohali</p>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <button onclick="switchScreen('orders')" class="w-7 h-7 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center relative hover:bg-slate-200">
+              <i class="fas fa-truck-fast text-[11px]"></i>
+              <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full border border-white"></span>
+            </button>
+            <div class="w-7 h-7 rounded-full grad-instant text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
+              DK
+            </div>
+          </div>
+        </div>
+
+        <!-- DUAL ORDERING MODE SWITCHER (FIGMA INSPIRED SEGMENTED CONTROL) -->
+        <div class="px-3.5 pb-2">
+          <div class="bg-slate-100/90 p-1 rounded-2xl flex relative border border-slate-200/80">
+            
+            <!-- Mode 1: Instant -->
+            <button id="btn-instant-mode" onclick="setDeliveryMode('instant')" 
+              class="flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center grad-instant text-white shadow-sm mode-tab-active">
+              <div class="flex items-center gap-1.5">
+                <i class="fas fa-bolt text-yellow-300 text-[11px]"></i>
+                <span class="text-[11px]">Instant Delivery</span>
+              </div>
+              <span class="text-[9px] font-normal opacity-90">15-20 Mins Express</span>
+            </button>
+
+            <!-- Mode 2: Next Morning -->
+            <button id="btn-morning-mode" onclick="setDeliveryMode('morning')" 
+              class="flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center text-slate-600 hover:text-slate-900">
+              <div class="flex items-center gap-1">
+                <i class="fas fa-sun text-amber-500 text-[11px]"></i>
+                <span class="text-[11px]">Next Morning</span>
+                <span class="bg-emerald-600 text-white font-extrabold text-[8px] px-1 py-0.2 rounded">SAVE 20%</span>
+              </div>
+              <span class="text-[9px] text-slate-400 font-normal">Farm Picked Tonight</span>
+            </button>
+
+          </div>
+        </div>
+
+        <!-- Dynamic Delivery Mode Info Banner -->
+        <div id="mode-banner" class="px-3.5 py-1.5 bg-rose-50/80 border-y border-rose-100 flex items-center justify-between text-[11px] text-rose-800">
+          <div class="flex items-center gap-1.5 font-medium">
+            <i class="fas fa-motorcycle text-rose-600 text-xs"></i>
+            <span>Instant Darkstore Dispatch Active</span>
+          </div>
+          <span class="text-[10px] font-extrabold bg-rose-200/60 px-1.5 py-0.5 rounded text-rose-900">15-20 MINS</span>
+        </div>
+
+        <!-- Modern Search Bar with Voice Icon -->
+        <div class="px-3.5 py-2">
+          <div class="relative flex items-center">
+            <i class="fas fa-magnifying-glass absolute left-3 text-slate-400 text-xs"></i>
+            <input type="text" placeholder="Search vegetables, fruits, combos..." 
+              class="w-full bg-slate-100 text-xs text-slate-800 font-medium pl-8 pr-8 py-2 rounded-xl border border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all">
+            <i class="fas fa-microphone absolute right-3 text-slate-400 text-xs cursor-pointer hover:text-emerald-600"></i>
+          </div>
+        </div>
+
+        <!-- Category Horizontal Scroll Pills -->
+        <div class="px-3.5 pb-2.5 flex items-center gap-1.5 overflow-x-auto custom-scrollbar text-[11px]">
+          <button onclick="filterCategory('all')" class="cat-chip bg-slate-900 text-white font-bold px-3 py-1 rounded-xl whitespace-nowrap shadow-2xs">🔥 All</button>
+          <button onclick="filterCategory('vegetables')" class="cat-chip bg-slate-100 text-slate-700 font-semibold px-3 py-1 rounded-xl whitespace-nowrap hover:bg-slate-200">🥬 Vegetables</button>
+          <button onclick="filterCategory('fruits')" class="cat-chip bg-slate-100 text-slate-700 font-semibold px-3 py-1 rounded-xl whitespace-nowrap hover:bg-slate-200">🍎 Fresh Fruits</button>
+          <button onclick="filterCategory('exotic')" class="cat-chip bg-slate-100 text-slate-700 font-semibold px-3 py-1 rounded-xl whitespace-nowrap hover:bg-slate-200">🥑 Organic & Exotic</button>
+          <button onclick="filterCategory('combos')" class="cat-chip bg-slate-100 text-slate-700 font-semibold px-3 py-1 rounded-xl whitespace-nowrap hover:bg-slate-200">📦 Value Combos</button>
+        </div>
+      </header>
+
+      <!-- HOME VIEW -->
+      <main id="view-home" class="flex-1 p-3 space-y-3">
+        
+        <!-- Modern Hero Banner (Changes with Mode) -->
+        <div id="hero-banner" class="grad-banner-instant rounded-2xl p-3.5 text-white shadow-sm relative overflow-hidden flex justify-between items-center">
+          <div class="relative z-10 max-w-[240px]">
+            <span class="inline-block bg-white/20 backdrop-blur-sm text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider mb-1">
+              ⚡ Instant Craving?
+            </span>
+            <h3 class="text-sm font-extrabold leading-tight">Fresh Produce Delivered in 15 Minutes</h3>
+            <p class="text-[10px] text-rose-100 mt-1">Superfast delivery from your nearest local darkstore.</p>
+          </div>
+          <div class="text-4xl select-none z-10 pr-1">🚀</div>
+          <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-lg"></div>
+        </div>
+
+        <!-- Next Morning Mode Special Harvest Card (Initially Hidden) -->
+        <div id="morning-special-card" class="hidden grad-banner-morning rounded-2xl p-3.5 text-white shadow-sm relative overflow-hidden">
+          <div class="relative z-10">
+            <div class="flex items-center justify-between mb-1">
+              <span class="bg-amber-400 text-slate-900 font-extrabold text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                <i class="fas fa-stopwatch text-[10px]"></i> CUTOFF TONIGHT: 10:00 PM
+              </span>
+              <span class="text-[9px] text-emerald-200 font-bold">Slot: 6 AM - 9 AM</span>
+            </div>
+            <h3 class="text-xs font-extrabold text-white">Direct Farm Sourcing • 20% Extra Savings</h3>
+            <p class="text-[10px] text-emerald-100 mt-0.5 leading-snug">Harvested fresh at 4 AM based on your order & delivered straight to your door step.</p>
+          </div>
+        </div>
+
+        <!-- Section Header -->
+        <div class="flex items-center justify-between pt-1 px-0.5">
+          <div class="flex items-center gap-1.5">
+            <h2 id="section-title" class="text-xs font-extrabold text-slate-900 tracking-tight">FRESH PRODUCE</h2>
+            <span id="product-count-badge" class="bg-slate-200 text-slate-700 text-[9px] font-bold px-1.5 py-0.2 rounded-full">8 items</span>
+          </div>
+          <div class="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+            <span>Dense View</span>
+            <i class="fas fa-grip-vertical text-emerald-600"></i>
+          </div>
+        </div>
+
+        <!-- HIGH-DENSITY COMPACT PRODUCT GRID (More Items Visible At Once!) -->
+        <div id="products-grid" class="grid grid-cols-2 gap-2">
+          <!-- Dynamically populated via JavaScript -->
+        </div>
+
+      </main>
+
+      <!-- ORDERS & LIVE TRACKING VIEW -->
+      <main id="view-orders" class="hidden flex-1 p-3 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Active Order Status</h2>
+          <span class="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-md">Order #FT-8924</span>
+        </div>
+
+        <!-- Order Card with Live Interactive Tracking -->
+        <div class="bg-white rounded-2xl p-3.5 shadow-2xs border border-slate-200/80 space-y-3">
+          
+          <!-- Mode Indicator -->
+          <div id="tracking-mode-badge" class="flex items-center justify-between bg-rose-50 border border-rose-100 p-2 rounded-xl text-xs">
+            <div class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full grad-instant text-white flex items-center justify-center font-bold text-[10px]">
+                <i class="fas fa-bolt"></i>
+              </div>
+              <div>
+                <div class="font-bold text-slate-900 text-xs">Instant Express Delivery</div>
+                <div class="text-[10px] text-slate-500">ETA: <span class="text-rose-600 font-extrabold">12 Mins</span></div>
+              </div>
+            </div>
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+          </div>
+
+          <!-- Step Progress Visualizer -->
+          <div class="py-1">
+            <div class="flex items-center justify-between relative">
+              <div class="absolute left-3 right-3 top-3 h-1 bg-slate-200 -z-0">
+                <div id="progress-line" class="h-full bg-emerald-500 transition-all duration-500" style="width: 66%;"></div>
+              </div>
+
+              <!-- Step 1 -->
+              <div class="flex flex-col items-center z-10">
+                <div class="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">
+                  <i class="fas fa-check"></i>
+                </div>
+                <span class="text-[9px] font-bold mt-1 text-slate-700">Received</span>
+              </div>
+              <!-- Step 2 -->
+              <div class="flex flex-col items-center z-10">
+                <div class="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">
+                  <i class="fas fa-box font-bold"></i>
+                </div>
+                <span class="text-[9px] font-bold mt-1 text-slate-700">Packed</span>
+              </div>
+              <!-- Step 3 -->
+              <div class="flex flex-col items-center z-10">
+                <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold pulse-ring">
+                  <i class="fas fa-motorcycle"></i>
+                </div>
+                <span class="text-[9px] font-extrabold mt-1 text-emerald-700">On Way</span>
+              </div>
+              <!-- Step 4 -->
+              <div class="flex flex-col items-center z-10">
+                <div class="w-6 h-6 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center text-[10px] font-bold">
+                  <i class="fas fa-house"></i>
+                </div>
+                <span class="text-[9px] font-medium mt-1 text-slate-400">Delivered</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Simulated Live Map View -->
+          <div class="h-40 bg-slate-200 rounded-xl relative overflow-hidden flex items-center justify-center border border-slate-200">
+            <div class="absolute inset-0 bg-emerald-50/70 flex flex-col justify-around p-2">
+              <div class="w-full h-1.5 bg-slate-300/50 rounded"></div>
+              <div class="w-4/5 h-1.5 bg-slate-300/50 rounded"></div>
+              <div class="w-full h-1.5 bg-slate-300/50 rounded"></div>
+            </div>
+            <!-- Destination Pin -->
+            <div class="absolute top-6 right-8 text-rose-600 text-xl flex flex-col items-center">
+              <i class="fas fa-location-dot"></i>
+              <span class="text-[8px] bg-slate-900 text-white font-bold px-1 rounded shadow-xs">Your Address</span>
+            </div>
+            <!-- Delivery Executive Marker -->
+            <div class="absolute bottom-8 left-10 text-emerald-700 text-lg flex flex-col items-center animate-bounce">
+              <i class="fas fa-motorcycle bg-white p-1 rounded-full shadow-md border border-emerald-500"></i>
+              <span class="text-[8px] bg-emerald-700 text-white font-bold px-1 rounded shadow-xs">Rahul (Rider)</span>
+            </div>
+          </div>
+
+          <!-- Delivery Executive Info -->
+          <div class="flex items-center justify-between pt-1">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-sm border border-slate-200">
+                👨‍🦱
+              </div>
+              <div>
+                <h4 class="text-xs font-extrabold text-slate-900">Rahul Sharma</h4>
+                <p class="text-[10px] text-slate-500">Assigned Delivery Partner • 4.9 ★</p>
+              </div>
+            </div>
+            <a href="tel:1234567890" class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs shadow-xs hover:bg-emerald-700">
+              <i class="fas fa-phone"></i>
+            </a>
+          </div>
+
+          <!-- Items Summary -->
+          <div class="bg-slate-50 rounded-xl p-2.5 text-xs space-y-1 border border-slate-100">
+            <div class="font-bold text-slate-800 text-[11px] mb-1">Tokri Summary:</div>
+            <div class="flex justify-between text-slate-600 text-[10px]">
+              <span>1x Fresh Organic Tomatoes (1kg)</span>
+              <span class="font-bold text-slate-900">₹38</span>
+            </div>
+            <div class="flex justify-between text-slate-600 text-[10px]">
+              <span>1x Shimla Red Apples (500g)</span>
+              <span class="font-bold text-slate-900">₹70</span>
+            </div>
+          </div>
+        </div>
+      </main>
+
+    </div> <!-- End Main Screen -->
+
+    <!-- FLOATING GLASSMORPHISM CART BAR (MINIMUM CLICKS) -->
+    <div id="floating-cart-bar" class="hidden absolute bottom-16 left-3 right-3 glass-dark text-white p-2.5 rounded-2xl shadow-xl z-40 flex items-center justify-between cursor-pointer border border-slate-700/60" onclick="openCheckoutModal()">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center font-extrabold text-xs shadow-2xs">
+          <span id="cart-qty-badge">0</span>
+        </div>
+        <div>
+          <div class="text-xs font-extrabold flex items-center gap-1.5">
+            <span>₹<span id="cart-total-price">0</span></span>
+            <span id="cart-discount-tag" class="hidden text-[8px] bg-amber-400 text-slate-900 px-1 py-0.2 rounded font-extrabold">FARM DISCOUNT APPLIED</span>
+          </div>
+          <p class="text-[9px] text-slate-300">Tap for 1-Click Express Checkout</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl font-extrabold text-xs shadow-xs">
+        <span>Checkout</span>
+        <i class="fas fa-chevron-right text-[9px]"></i>
+      </div>
+    </div>
+
+    <!-- BOTTOM NAVIGATION TAB BAR -->
+    <nav class="absolute bottom-0 left-0 right-0 h-15 bg-white border-t border-slate-200 flex items-center justify-around z-40">
+      <button onclick="switchScreen('home')" id="tab-home" class="flex flex-col items-center gap-0.5 text-emerald-600 font-bold">
+        <i class="fas fa-store text-sm"></i>
+        <span class="text-[9px]">Shop</span>
+      </button>
+      <button onclick="switchScreen('categories')" id="tab-categories" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 font-medium">
+        <i class="fas fa-shapes text-sm"></i>
+        <span class="text-[9px]">Categories</span>
+      </button>
+      <button onclick="switchScreen('orders')" id="tab-orders" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 font-medium relative">
+        <i class="fas fa-clock-rotate-left text-sm"></i>
+        <span class="text-[9px]">Orders</span>
+        <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full absolute top-0.5 right-2"></span>
+      </button>
+      <button onclick="switchScreen('profile')" id="tab-profile" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 font-medium">
+        <i class="fas fa-user text-sm"></i>
+        <span class="text-[9px]">Account</span>
+      </button>
+    </nav>
+
+    <!-- CHECKOUT MODAL DRAWER -->
+    <div id="checkout-modal" class="hidden absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end transition-opacity">
+      <div class="bg-white rounded-t-3xl p-4 max-h-[88%] overflow-y-auto space-y-3 shadow-2xl">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+              <i class="fas fa-basket-shopping"></i>
+            </div>
+            <h3 class="text-xs font-extrabold text-slate-900 uppercase">Express Checkout</h3>
+          </div>
+          <button onclick="closeCheckoutModal()" class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs hover:bg-slate-200">
+            <i class="fas fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Mode Banner -->
+        <div id="modal-mode-summary" class="bg-slate-50 p-2.5 rounded-xl text-xs border border-slate-200">
+          <!-- Dynamic JS -->
+        </div>
+
+        <!-- Delivery Address -->
+        <div>
+          <div class="text-[11px] font-extrabold text-slate-800 mb-1 flex justify-between">
+            <span>Delivering To</span>
+            <span class="text-emerald-600 text-[10px] font-bold cursor-pointer">Change Address</span>
+          </div>
+          <div class="bg-emerald-50/70 border border-emerald-200 p-2 rounded-xl flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2">
+              <i class="fas fa-house-chimney text-emerald-600 text-xs"></i>
+              <div>
+                <div class="font-bold text-slate-900 text-[11px]">Home • Flat 402, Green Valley</div>
+                <div class="text-[9px] text-slate-500">Sector 62, Mohali</div>
+              </div>
+            </div>
+            <i class="fas fa-circle-check text-emerald-600 text-sm"></i>
+          </div>
+        </div>
+
+        <!-- Payment Method -->
+        <div>
+          <div class="text-[11px] font-extrabold text-slate-800 mb-1">Select Payment</div>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="border-2 border-emerald-500 bg-emerald-50/40 p-2 rounded-xl flex items-center gap-2 cursor-pointer text-[11px] font-extrabold text-slate-900">
+              <input type="radio" name="pay" checked class="accent-emerald-600">
+              <i class="fas fa-mobile-screen text-emerald-600"></i>
+              <span>UPI (Google Pay)</span>
+            </label>
+            <label class="border border-slate-200 p-2 rounded-xl flex items-center gap-2 cursor-pointer text-[11px] font-semibold text-slate-600">
+              <input type="radio" name="pay" class="accent-emerald-600">
+              <i class="fas fa-money-bill-wave text-slate-400"></i>
+              <span>Cash on Delivery</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Bill Breakdown -->
+        <div class="bg-slate-50 p-2.5 rounded-xl text-xs space-y-1 border border-slate-200/60">
+          <div class="flex justify-between text-slate-600 text-[11px]">
+            <span>Item Total</span>
+            <span>₹<span id="bill-subtotal">0</span></span>
+          </div>
+          <div id="bill-discount-row" class="hidden flex justify-between text-emerald-700 font-extrabold text-[11px]">
+            <span>Next Morning Farm Discount (20%)</span>
+            <span>-₹<span id="bill-discount">0</span></span>
+          </div>
+          <div class="flex justify-between text-slate-600 text-[11px]">
+            <span>Delivery Fee</span>
+            <span class="text-emerald-600 font-extrabold">FREE</span>
+          </div>
+          <div class="flex justify-between text-slate-900 font-extrabold text-xs pt-1.5 border-t border-slate-200">
+            <span>To Pay</span>
+            <span>₹<span id="bill-final">0</span></span>
+          </div>
+        </div>
+
+        <!-- 1-CLICK PLACE ORDER BUTTON -->
+        <button onclick="placeOrder()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider">
+          <span>PLACE ORDER NOW</span>
+          <i class="fas fa-arrow-right text-[11px]"></i>
+        </button>
+
+      </div>
+    </div>
+
+  </div> <!-- End Phone Container -->
+
+  <!-- INTERACTIVE LOGIC SCRIPT -->
+  <script>
+    let currentMode = 'instant'; // 'instant' or 'morning'
+    let currentCategory = 'all';
+    let cart = {};
+
+    // Produce Catalog Data with Dual Prices
+    const products = [
+      { id: 'p1', name: 'Fresh Organic Tomatoes', weight: '1 kg', category: 'vegetables', priceInstant: 48, priceMorning: 38, image: '🍅', tag: 'Farm Fresh' },
+      { id: 'p2', name: 'Shimla Red Apples', weight: '500 g', category: 'fruits', priceInstant: 90, priceMorning: 70, image: '🍎', tag: 'Crispy' },
+      { id: 'p3', name: 'Green Spinach (Palak)', weight: '250 g', category: 'vegetables', priceInstant: 25, priceMorning: 18, image: '🥬', tag: 'Direct Pick' },
+      { id: 'p4', name: 'Robusta Bananas', weight: '1 Dozen', category: 'fruits', priceInstant: 60, priceMorning: 48, image: '🍌', tag: 'Potassium' },
+      { id: 'p5', name: 'Fresh Cucumbers', weight: '500 g', category: 'vegetables', priceInstant: 30, priceMorning: 22, image: '🥒', tag: 'Cooling' },
+      { id: 'p6', name: 'Farm Organic Broccoli', weight: '1 Pc (400g)', category: 'exotic', priceInstant: 85, priceMorning: 65, image: '🥦', tag: 'Organic' },
+      { id: 'p7', name: 'Weekly Salad Tokri Box', weight: '2.5 kg Box', category: 'combos', priceInstant: 299, priceMorning: 229, image: '🥗', tag: 'Super Saver' },
+      { id: 'p8', name: 'Alphonso Mangoes', weight: '1 kg', category: 'fruits', priceInstant: 250, priceMorning: 195, image: '🥭', tag: 'Seasonal' },
+      { id: 'p9', name: 'Fresh Red Onions', weight: '1 kg', category: 'vegetables', priceInstant: 35, priceMorning: 28, image: '🧅', tag: 'Daily Staple' },
+      { id: 'p10', name: 'Organic Potatoes', weight: '1 kg', category: 'vegetables', priceInstant: 32, priceMorning: 24, image: '🥔', tag: 'Fresh Batch' }
+    ];
+
+    // High-Density Compact Card Renderer (Allows more items to be visible on screen!)
+    function renderProducts() {
+      const grid = document.getElementById('products-grid');
+      grid.innerHTML = '';
+
+      const filtered = currentCategory === 'all' 
+        ? products 
+        : products.filter(p => p.category === currentCategory);
+
+      document.getElementById('product-count-badge').innerText = `${filtered.length} items`;
+
+      filtered.forEach(p => {
+        const qty = cart[p.id] || 0;
+        const price = currentMode === 'instant' ? p.priceInstant : p.priceMorning;
+        const oldPrice = currentMode === 'morning' ? p.priceInstant : null;
+
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl p-2 shadow-2xs border border-slate-200/80 flex flex-col justify-between relative hover:shadow-xs transition-all';
+        
+        card.innerHTML = `
+          <!-- Top Badge -->
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[8px] font-extrabold px-1.5 py-0.2 rounded-full ${currentMode === 'morning' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-50 text-rose-700'}">
+              ${p.tag}
+            </span>
+            ${currentMode === 'morning' ? `<span class="text-[8px] font-bold text-emerald-600">SAVE 20%</span>` : ''}
+          </div>
+
+          <!-- Product Emoji / Graphic -->
+          <div class="text-center py-1 text-3xl select-none mb-0.5">${p.image}</div>
+
+          <!-- Product Details -->
+          <div>
+            <h3 class="text-[11px] font-extrabold text-slate-900 leading-tight truncate">${p.name}</h3>
+            <p class="text-[9px] text-slate-400 font-semibold mt-0.5">${p.weight}</p>
+          </div>
+
+          <!-- Price & Compact Add Button -->
+          <div class="mt-2 pt-1 border-t border-slate-100 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-extrabold ${currentMode === 'morning' ? 'text-emerald-700' : 'text-slate-900'}">
+                ₹${price}
+              </div>
+              ${oldPrice ? `<div class="text-[8px] text-slate-400 line-through">₹${oldPrice}</div>` : ''}
+            </div>
+
+            ${qty === 0 ? `
+              <button onclick="updateCart('${p.id}', 1)" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[10px] px-2.5 py-1 rounded-xl border border-emerald-200 transition">
+                + ADD
+              </button>
+            ` : `
+              <div class="flex items-center bg-emerald-600 text-white rounded-xl text-[10px] font-bold px-1.5 py-0.5 gap-1.5 shadow-2xs">
+                <button onclick="updateCart('${p.id}', -1)" class="px-0.5 hover:opacity-75">-</button>
+                <span class="text-[10px] font-extrabold">${qty}</span>
+                <button onclick="updateCart('${p.id}', 1)" class="px-0.5 hover:opacity-75">+</button>
+              </div>
+            `}
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // Toggle Delivery Mode
+    function setDeliveryMode(mode) {
+      currentMode = mode;
+      const btnInstant = document.getElementById('btn-instant-mode');
+      const btnMorning = document.getElementById('btn-morning-mode');
+      const banner = document.getElementById('mode-banner');
+      const heroBanner = document.getElementById('hero-banner');
+      const morningCard = document.getElementById('morning-special-card');
+
+      if (mode === 'instant') {
+        btnInstant.className = "flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center grad-instant text-white shadow-sm mode-tab-active";
+        btnMorning.className = "flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center text-slate-600 hover:text-slate-900";
+        banner.className = "px-3.5 py-1.5 bg-rose-50/80 border-y border-rose-100 flex items-center justify-between text-[11px] text-rose-800";
+        banner.innerHTML = `<div class="flex items-center gap-1.5 font-medium"><i class="fas fa-motorcycle text-rose-600 text-xs"></i><span>Instant Darkstore Dispatch Active</span></div><span class="text-[10px] font-extrabold bg-rose-200/60 px-1.5 py-0.5 rounded text-rose-900">15-20 MINS</span>`;
+        
+        heroBanner.className = "grad-banner-instant rounded-2xl p-3.5 text-white shadow-sm relative overflow-hidden flex justify-between items-center";
+        heroBanner.innerHTML = `
+          <div class="relative z-10 max-w-[240px]">
+            <span class="inline-block bg-white/20 backdrop-blur-sm text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider mb-1">⚡ Instant Craving?</span>
+            <h3 class="text-sm font-extrabold leading-tight">Fresh Produce Delivered in 15 Minutes</h3>
+            <p class="text-[10px] text-rose-100 mt-1">Superfast delivery from your nearest local darkstore.</p>
+          </div>
+          <div class="text-4xl select-none z-10 pr-1">🚀</div>
+        `;
+        morningCard.classList.add('hidden');
+      } else {
+        btnMorning.className = "flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center grad-morning text-white shadow-sm mode-tab-active";
+        btnInstant.className = "flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center text-slate-600 hover:text-slate-900";
+        banner.className = "px-3.5 py-1.5 bg-emerald-50/80 border-y border-emerald-100 flex items-center justify-between text-[11px] text-emerald-800";
+        banner.innerHTML = `<div class="flex items-center gap-1.5 font-medium"><i class="fas fa-seedling text-emerald-600 text-xs"></i><span class="font-bold">Next Morning Harvest Mode (20% Off Applied)</span></div>`;
+        
+        heroBanner.className = "grad-banner-morning rounded-2xl p-3.5 text-white shadow-sm relative overflow-hidden flex justify-between items-center";
+        heroBanner.innerHTML = `
+          <div class="relative z-10 max-w-[240px]">
+            <span class="inline-block bg-white/20 backdrop-blur-sm text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider mb-1">🌅 Pre-Order Savings</span>
+            <h3 class="text-sm font-extrabold leading-tight">Harvested Fresh 4 AM Tomorrow</h3>
+            <p class="text-[10px] text-emerald-100 mt-1">Cutoff 10 PM tonight • Delivery 6 AM - 9 AM.</p>
+          </div>
+          <div class="text-4xl select-none z-10 pr-1">🌾</div>
+        `;
+        morningCard.classList.remove('hidden');
+      }
+
+      renderProducts();
+      updateCartUI();
+    }
+
+    // Filter Categories
+    function filterCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.cat-chip').forEach(btn => {
+        btn.className = "cat-chip bg-slate-100 text-slate-700 font-semibold px-3 py-1 rounded-xl whitespace-nowrap hover:bg-slate-200";
+      });
+      event.target.className = "cat-chip bg-slate-900 text-white font-bold px-3 py-1 rounded-xl whitespace-nowrap shadow-2xs";
+      renderProducts();
+    }
+
+    // Cart Operations
+    function updateCart(productId, delta) {
+      cart[productId] = (cart[productId] || 0) + delta;
+      if (cart[productId] <= 0) delete cart[productId];
+      renderProducts();
+      updateCartUI();
+    }
+
+    function updateCartUI() {
+      let totalQty = 0;
+      let totalPrice = 0;
+
+      Object.keys(cart).forEach(id => {
+        const p = products.find(x => x.id === id);
+        const price = currentMode === 'instant' ? p.priceInstant : p.priceMorning;
+        totalQty += cart[id];
+        totalPrice += price * cart[id];
+      });
+
+      const floatBar = document.getElementById('floating-cart-bar');
+      if (totalQty > 0) {
+        floatBar.classList.remove('hidden');
+        document.getElementById('cart-qty-badge').innerText = totalQty;
+        document.getElementById('cart-total-price').innerText = totalPrice;
+        const discountTag = document.getElementById('cart-discount-tag');
+        if (currentMode === 'morning') discountTag.classList.remove('hidden');
+        else discountTag.classList.add('hidden');
+      } else {
+        floatBar.classList.add('hidden');
+      }
+    }
+
+    // Navigation Screens
+    function switchScreen(screen) {
+      const vHome = document.getElementById('view-home');
+      const vOrders = document.getElementById('view-orders');
+      const tabHome = document.getElementById('tab-home');
+      const tabOrders = document.getElementById('tab-orders');
+
+      if (screen === 'home') {
+        vHome.classList.remove('hidden');
+        vOrders.classList.add('hidden');
+        tabHome.className = "flex flex-col items-center gap-0.5 text-emerald-600 font-bold";
+        tabOrders.className = "flex flex-col items-center gap-0.5 text-slate-400 font-medium";
+      } else if (screen === 'orders') {
+        vHome.classList.add('hidden');
+        vOrders.classList.remove('hidden');
+        tabOrders.className = "flex flex-col items-center gap-0.5 text-emerald-600 font-bold";
+        tabHome.className = "flex flex-col items-center gap-0.5 text-slate-400 font-medium";
+      }
+    }
+
+    // Modal Control
+    function openCheckoutModal() {
+      let total = 0;
+      let instantTotal = 0;
+      Object.keys(cart).forEach(id => {
+        const p = products.find(x => x.id === id);
+        total += (currentMode === 'instant' ? p.priceInstant : p.priceMorning) * cart[id];
+        instantTotal += p.priceInstant * cart[id];
+      });
+
+      document.getElementById('bill-subtotal').innerText = instantTotal;
+      document.getElementById('bill-final').innerText = total;
+
+      const discountRow = document.getElementById('bill-discount-row');
+      if (currentMode === 'morning') {
+        discountRow.classList.remove('hidden');
+        document.getElementById('bill-discount').innerText = (instantTotal - total);
+      } else {
+        discountRow.classList.add('hidden');
+      }
+
+      const modeSummary = document.getElementById('modal-mode-summary');
+      if (currentMode === 'instant') {
+        modeSummary.innerHTML = `<div class="flex items-center gap-2 font-extrabold text-rose-700 text-xs"><i class="fas fa-bolt"></i> Instant Express Delivery (15-20 Mins)</div><div class="text-[10px] text-slate-500 mt-0.5">Order dispatched immediately from local darkstore.</div>`;
+      } else {
+        modeSummary.innerHTML = `<div class="flex items-center gap-2 font-extrabold text-emerald-700 text-xs"><i class="fas fa-sun"></i> Tomorrow Morning Slot (6:00 AM - 9:00 AM)</div><div class="text-[10px] text-slate-500 mt-0.5">Farm harvested overnight. 20% Discount applied!</div>`;
+      }
+
+      document.getElementById('checkout-modal').classList.remove('hidden');
+    }
+
+    function closeCheckoutModal() {
+      document.getElementById('checkout-modal').classList.add('hidden');
+    }
+
+    // Order Placement
+    function placeOrder() {
+      closeCheckoutModal();
+      const badge = document.getElementById('tracking-mode-badge');
+      if (currentMode === 'instant') {
+        badge.innerHTML = `<div class="flex items-center gap-2"><div class="w-6 h-6 rounded-full grad-instant text-white flex items-center justify-center font-bold text-[10px]"><i class="fas fa-bolt"></i></div><div><div class="font-bold text-slate-900 text-xs">Instant Express Delivery</div><div class="text-[10px] text-slate-500">ETA: <span class="text-rose-600 font-extrabold">12 Mins</span></div></div></div><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>`;
+      } else {
+        badge.innerHTML = `<div class="flex items-center gap-2"><div class="w-6 h-6 rounded-full grad-morning text-white flex items-center justify-center font-bold text-[10px]"><i class="fas fa-sun"></i></div><div><div class="font-bold text-slate-900 text-xs">Tomorrow Morning Slot</div><div class="text-[10px] text-slate-500">Scheduled: <span class="text-emerald-700 font-extrabold">Tomorrow 7:00 AM</span></div></div></div><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>`;
+      }
+      cart = {};
+      updateCartUI();
+      switchScreen('orders');
+    }
+
+    // Init App
+    renderProducts();
+  </script>
+</body>
+</html>
