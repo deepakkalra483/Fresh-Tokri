@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { fetchAddresses } from './features/address/addressSlice';
 import StickyHeader from './components/layout/StickyHeader';
 import FloatingCartBar from './components/layout/FloatingCartBar';
 import BottomNavbar from './components/layout/BottomNavbar';
@@ -10,7 +12,12 @@ import CategoriesPage from './pages/CategoriesPage';
 import OrdersPage from './pages/OrdersPage';
 
 export default function App() {
+  const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('home');
+
+  useEffect(() => {
+    dispatch(fetchAddresses());
+  }, [dispatch]);
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-0 md:p-4 font-sans antialiased select-none">

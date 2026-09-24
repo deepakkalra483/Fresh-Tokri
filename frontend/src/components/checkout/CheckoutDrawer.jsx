@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { selectIsCheckoutOpen, closeCheckout, selectCartTotals, selectCartItems, clearCart } from '../../features/cart/cartSlice';
 import { selectDeliveryMode } from '../../features/deliveryMode/deliveryModeSlice';
 import { selectActiveAddress } from '../../features/address/addressSlice';
-import { placeNewOrder } from '../../features/orders/ordersSlice';
+import { submitOrder } from '../../features/orders/ordersSlice';
 import { X, ShoppingBasket, Home, CheckCircle2, ArrowRight, Zap, Sun, CreditCard, Banknote } from 'lucide-react';
 
 export default function CheckoutDrawer({ onOrderPlaced }) {
@@ -26,10 +26,12 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
       return { id: p.id, name: `${p.name} (${p.weight})`, price, qty };
     });
 
-    dispatch(placeNewOrder({
+    dispatch(submitOrder({
       items: formattedItems,
       mode: mode,
       total: totals.finalTotal,
+      paymentMethod,
+      deliveryAddress: `${address.label} • ${address.flat}`,
     }));
 
     dispatch(clearCart());
@@ -101,9 +103,9 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
           <div className="text-[11px] font-extrabold text-slate-800 mb-1">Select Payment Method</div>
           <div className="grid grid-cols-2 gap-2">
             <label 
-              onClick={() => setPaymentMethod('upi')}
+              onClick={() => setPaymentMethod('UPI')}
               className={`p-2 rounded-xl flex items-center gap-2 cursor-pointer text-[11px] font-extrabold transition-colors ${
-                paymentMethod === 'upi' 
+                paymentMethod === 'UPI' 
                   ? 'border-2 border-emerald-500 bg-emerald-50/40 text-slate-900' 
                   : 'border border-slate-200 text-slate-600'
               }`}
@@ -112,9 +114,9 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
               <span>UPI (Google Pay)</span>
             </label>
             <label 
-              onClick={() => setPaymentMethod('cod')}
+              onClick={() => setPaymentMethod('COD')}
               className={`p-2 rounded-xl flex items-center gap-2 cursor-pointer text-[11px] font-extrabold transition-colors ${
-                paymentMethod === 'cod' 
+                paymentMethod === 'COD' 
                   ? 'border-2 border-emerald-500 bg-emerald-50/40 text-slate-900' 
                   : 'border border-slate-200 text-slate-600'
               }`}
@@ -163,4 +165,3 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
     </div>
   );
 }
-
