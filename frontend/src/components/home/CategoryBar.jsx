@@ -1,22 +1,39 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { selectActiveCategory, setActiveCategory } from '../../features/products/productsSlice';
+import {
+  selectActiveCategory,
+  setActiveCategory,
+  selectAvailableCategories,
+} from '../../features/products/productsSlice';
 
-const categories = [
-  { id: 'all', label: '🔥 All Produce' },
-  { id: 'vegetables', label: '🥬 Vegetables' },
-  { id: 'fruits', label: '🍎 Fresh Fruits' },
-  { id: 'exotic', label: '🥑 Organic & Exotic' },
-  { id: 'combos', label: '📦 Value Combos' },
-];
+// Category display config — maps Firestore category key → label + emoji
+const CATEGORY_META = {
+  all:        { label: '🔥 All Produce'     },
+  vegetables: { label: '🥬 Vegetables'      },
+  fruits:     { label: '🍎 Fresh Fruits'    },
+  exotic:     { label: '🥑 Organic & Exotic' },
+  combos:     { label: '📦 Value Combos'    },
+  seasonal:   { label: '🌱 Seasonal'        },
+  sprouts:    { label: '🌿 Sprouts & Herbs' },
+};
 
 export default function CategoryBar() {
-  const dispatch = useDispatch();
-  const activeCat = useSelector(selectActiveCategory);
+  const dispatch    = useDispatch();
+  const activeCat   = useSelector(selectActiveCategory);
+  const availCats   = useSelector(selectAvailableCategories); // from live Firestore data
+
+  // Build the tab list: always "all" first, then whatever categories exist in Firestore
+  const tabs = [
+    { id: 'all', label: '🔥 All Produce' },
+    ...availCats.map(cat => ({
+      id:    cat,
+      label: CATEGORY_META[cat]?.label || `🛒 ${cat.charAt(0).toUpperCase() + cat.slice(1)}`,
+    })),
+  ];
 
   return (
     <div className="px-4 py-2 flex items-center gap-1.5 overflow-x-auto custom-scrollbar text-[11px] bg-white border-t border-slate-100">
-      {categories.map((cat) => {
+      {tabs.map((cat) => {
         const isActive = activeCat === cat.id;
         return (
           <button

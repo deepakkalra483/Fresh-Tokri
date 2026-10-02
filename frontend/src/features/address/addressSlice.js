@@ -1,6 +1,6 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchAddressesAPI } from '../../services/api';
+import { createSlice } from '@reduxjs/toolkit';
 
+// Static addresses — no backend needed for this (can add Firebase auth later)
 const initialAddresses = [
   {
     id: 'addr-1',
@@ -25,20 +25,10 @@ const initialAddresses = [
   },
 ];
 
-export const fetchAddresses = createAsyncThunk(
-  'address/fetchAddresses',
-  async (_, { rejectWithValue }) => {
-    const data = await fetchAddressesAPI();
-    if (data) return data;
-    return initialAddresses;
-  }
-);
-
 const initialState = {
   activeAddress: initialAddresses[0],
   savedAddresses: initialAddresses,
   isAddressModalOpen: false,
-  status: 'idle',
 };
 
 export const addressSlice = createSlice({
@@ -56,18 +46,10 @@ export const addressSlice = createSlice({
       state.isAddressModalOpen = false;
     },
   },
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchAddresses.fulfilled, (state, action) => {
-        if (action.payload && action.payload.length > 0) {
-          state.savedAddresses = action.payload;
-          state.activeAddress = action.payload[0];
-        }
-      });
-  },
 });
 
-export const { setActiveAddress, openAddressModal, closeAddressModal } = addressSlice.actions;
+export const { setActiveAddress, openAddressModal, closeAddressModal } =
+  addressSlice.actions;
 
 export const selectActiveAddress = (state) => state.address.activeAddress;
 export const selectSavedAddresses = (state) => state.address.savedAddresses;

@@ -10,8 +10,8 @@ dist-ssr/
 npm-debug.log*
 
 # Local Env
-.env
 .env.local
 
 # Vercel
 .vercel/
+

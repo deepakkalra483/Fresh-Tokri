@@ -4,34 +4,39 @@ import { selectIsCheckoutOpen, closeCheckout, selectCartTotals, selectCartItems,
 import { selectDeliveryMode } from '../../features/deliveryMode/deliveryModeSlice';
 import { selectActiveAddress } from '../../features/address/addressSlice';
 import { submitOrder } from '../../features/orders/ordersSlice';
+import { selectCurrentUser } from '../../features/auth/authSlice';
 import { X, ShoppingBasket, Home, CheckCircle2, ArrowRight, Zap, Sun, CreditCard, Banknote } from 'lucide-react';
 
 export default function CheckoutDrawer({ onOrderPlaced }) {
-  const dispatch = useDispatch();
-  const isOpen = useSelector(selectIsCheckoutOpen);
-  const totals = useSelector(selectCartTotals);
-  const cartItems = useSelector(selectCartItems);
-  const mode = useSelector(selectDeliveryMode);
-  const address = useSelector(selectActiveAddress);
-  const products = useSelector((state) => state.products.productsList);
+  const dispatch      = useDispatch();
+  const isOpen        = useSelector(selectIsCheckoutOpen);
+  const totals        = useSelector(selectCartTotals);
+  const cartItems     = useSelector(selectCartItems);
+  const mode          = useSelector(selectDeliveryMode);
+  const address       = useSelector(selectActiveAddress);
+  const products      = useSelector((state) => state.products.productsList);
+  const currentUser   = useSelector(selectCurrentUser);
 
-  const [paymentMethod, setPaymentMethod] = useState('upi');
+  const [paymentMethod, setPaymentMethod] = useState('UPI');
 
   if (!isOpen) return null;
 
   const handlePlaceOrder = () => {
     const formattedItems = Object.entries(cartItems).map(([id, qty]) => {
       const p = products.find((x) => x.id === id);
+      if (!p) return null;
       const price = mode === 'instant' ? p.priceInstant : p.priceMorning;
       return { id: p.id, name: `${p.name} (${p.weight})`, price, qty };
-    });
+    }).filter(Boolean);
 
     dispatch(submitOrder({
-      items: formattedItems,
-      mode: mode,
-      total: totals.finalTotal,
+      userId:          currentUser?.uid  || 'guest',
+      customerName:    currentUser?.name || 'Customer',
+      items:           formattedItems,
+      mode,
+      total:           totals.finalTotal,
       paymentMethod,
-      deliveryAddress: `${address.label} • ${address.flat}`,
+      deliveryAddress: `${address.label} • ${address.flat}, ${address.area}`,
     }));
 
     dispatch(clearCart());

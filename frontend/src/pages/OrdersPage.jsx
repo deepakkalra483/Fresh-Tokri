@@ -1,7 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchAllOrders,
   setTrackingOrder,
   clearTrackingOrder,
   selectAllOrders,
@@ -13,7 +12,7 @@ import {
 import LiveOrderTracker from '../components/orders/LiveOrderTracker';
 import {
   Package, Clock, CheckCircle2, Bike, ArrowLeft,
-  ChevronRight, Zap, Sun, ShoppingBag, RefreshCw
+  ChevronRight, Zap, Sun, ShoppingBag
 } from 'lucide-react';
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
@@ -120,10 +119,7 @@ export default function OrdersPage() {
   const trackingOrder = useSelector(selectTrackingOrder);
   const fetchStatus = useSelector(selectOrderFetchStatus);
 
-  // Fetch all orders from MongoDB on mount
-  useEffect(() => {
-    dispatch(fetchAllOrders());
-  }, [dispatch]);
+  // Orders come in real-time from Firestore via App.jsx listener — no manual fetch needed
 
   // ─── Tracking View ──────────────────────────────────────────────────────────
   if (trackingOrderId && trackingOrder) {
@@ -149,16 +145,12 @@ export default function OrdersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">My Orders</h2>
-          <p className="text-[10px] text-slate-400 mt-0.5">{allOrders.length} order{allOrders.length !== 1 ? 's' : ''} found</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">{allOrders.length} order{allOrders.length !== 1 ? 's' : ''} · Live updates</p>
         </div>
-        <button
-          onClick={() => dispatch(fetchAllOrders())}
-          disabled={fetchStatus === 'loading'}
-          className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
-          title="Refresh"
-        >
-          <RefreshCw size={13} className={fetchStatus === 'loading' ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-1 text-[9px] text-emerald-600 font-bold">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Live
+        </div>
       </div>
 
       {/* Loading skeleton */}
