@@ -1,5 +1,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchAllOrdersAPI, updateOrderStatusAPI, assignRiderAPI } from '../../services/api';
+import {
+  fetchAllOrdersFromFirestore,
+  updateOrderStatusInFirestore,
+  assignRiderInFirestore,
+} from '../../firebase/orderService';
 
 const mockOrders = [
   {
@@ -11,12 +15,12 @@ const mockOrders = [
     mode: 'instant',
     items: [
       { name: 'Fresh Organic Farm Tomatoes (1kg)', qty: 1, price: 38 },
-      { name: 'Shimla Red Apples (500g)', qty: 1, price: 70 }
+      { name: 'Shimla Red Apples (500g)', qty: 1, price: 70 },
     ],
     totalPaid: 108,
     paymentMethod: 'UPI',
     placedAt: '10:45 AM',
-    rider: { name: 'Rahul Sharma', phone: '+91 98765 43210' }
+    rider: { name: 'Rahul Sharma', phone: '+91 98765 43210' },
   },
   {
     id: 'FT-8925',
@@ -27,19 +31,19 @@ const mockOrders = [
     mode: 'morning',
     items: [
       { name: 'Weekly Salad Tokri Box (2.5kg)', qty: 1, price: 229 },
-      { name: 'Fresh Alphonso Mangoes (1kg)', qty: 1, price: 195 }
+      { name: 'Fresh Alphonso Mangoes (1kg)', qty: 1, price: 195 },
     ],
     totalPaid: 424,
     paymentMethod: 'COD',
     placedAt: '09:15 AM',
-    rider: { name: 'Vikram Singh', phone: '+91 98123 45678' }
-  }
+    rider: { name: 'Vikram Singh', phone: '+91 98123 45678' },
+  },
 ];
 
 export const fetchAdminOrders = createAsyncThunk(
   'adminOrders/fetchAdminOrders',
   async (_, { rejectWithValue }) => {
-    const data = await fetchAllOrdersAPI();
+    const data = await fetchAllOrdersFromFirestore();
     if (data) return data;
     return mockOrders;
   }
@@ -48,7 +52,7 @@ export const fetchAdminOrders = createAsyncThunk(
 export const updateOrderStatusThunk = createAsyncThunk(
   'adminOrders/updateOrderStatusThunk',
   async ({ id, status }, { dispatch }) => {
-    await updateOrderStatusAPI(id, status);
+    await updateOrderStatusInFirestore(id, status);
     return { id, status };
   }
 );
@@ -56,7 +60,7 @@ export const updateOrderStatusThunk = createAsyncThunk(
 export const assignRiderThunk = createAsyncThunk(
   'adminOrders/assignRiderThunk',
   async ({ id, rider }, { dispatch }) => {
-    await assignRiderAPI(id, rider);
+    await assignRiderInFirestore(id, rider);
     return { id, rider, status: 'on_way' };
   }
 );
@@ -86,7 +90,7 @@ export const adminOrdersSlice = createSlice({
     },
     setFilterStatus: (state, action) => {
       state.filterStatus = action.payload;
-    }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -106,7 +110,7 @@ export const adminOrdersSlice = createSlice({
           order.status = 'on_way';
         }
       });
-  }
+  },
 });
 
 export const { updateOrderStatus, assignRider, setFilterStatus } = adminOrdersSlice.actions;

@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── PRODUCTS ──────────────────────────────────────────────────────────────
+    // Anyone can READ products (customers browsing the store)
+    // Only authenticated admin can WRITE (but since we have no auth yet, 
+    // we allow write from any request for now — tighten after adding Firebase Auth)
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if true; // TODO: restrict to admin after adding Firebase Auth
+    }
+
+    // ── ORDERS ───────────────────────────────────────────────────────────────
+    // Anyone can CREATE orders (customers placing orders)
+    // Anyone can READ/UPDATE orders (for now — tighten after adding Firebase Auth)
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true; // TODO: restrict status updates to admin after Firebase Auth
+      allow delete: if false; // Never delete orders
+    }
+
+    // ── EVERYTHING ELSE ──────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
