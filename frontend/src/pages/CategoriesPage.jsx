@@ -3,25 +3,23 @@ import { useSelector, useDispatch } from 'react-redux';
 import { selectDeliveryMode } from '../features/deliveryMode/deliveryModeSlice';
 import { selectCartItems, addToCart, removeFromCart } from '../features/cart/cartSlice';
 import { selectAllProducts, openProductDetails } from '../features/products/productsSlice';
+import { selectCategories } from '../features/categories/categoriesSlice';
 import { Heart, Plus, Minus, ChevronLeft, ShoppingBag, Package } from 'lucide-react';
 
-// These map sidebar IDs → Firestore `category` field values
-// Add more entries here as you add categories to Firestore
-const sidebarCategories = [
-  { id: 'all',        label: 'All Items',         icon: '🛒' },
-  { id: 'vegetables', label: 'Fresh Vegetables',  icon: '🥬' },
-  { id: 'fruits',     label: 'Fresh Fruits',      icon: '🍎' },
-  { id: 'exotic',     label: 'Exotics',           icon: '🥑' },
-  { id: 'combos',     label: 'Combo Boxes',       icon: '🥗' },
-  { id: 'seasonal',   label: 'Seasonal',          icon: '🍌' },
-  { id: 'sprouts',    label: 'Sprouts & Herbs',   icon: '🌿' },
-];
+
 
 export default function CategoriesPage({ onBackToHome }) {
   const dispatch = useDispatch();
   const currentMode = useSelector(selectDeliveryMode);
   const cartItems = useSelector(selectCartItems);
-  const allProducts = useSelector(selectAllProducts); // from Firestore via Redux
+  const allProducts = useSelector(selectAllProducts);
+  const rawCategories = useSelector(selectCategories);
+
+  // Prepend 'All Items' to the dynamic categories
+  const sidebarCategories = useMemo(() => [
+    { id: 'all', label: 'All Items', icon: '🛒' },
+    ...rawCategories,
+  ], [rawCategories]);
 
   const [activeCategory, setActiveCategory] = useState('all');
   const [favorites, setFavorites] = useState({});

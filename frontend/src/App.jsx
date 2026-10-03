@@ -17,6 +17,10 @@ import { subscribeToAuthState } from './firebase/authService';
 import { setProductsList, setProductsError } from './features/products/productsSlice';
 import { subscribeToInventory, seedInventoryIfEmpty } from './firebase/inventoryService';
 
+// Categories
+import { setCategoriesList } from './features/categories/categoriesSlice';
+import { subscribeToCategories, seedCategoriesIfEmpty } from './firebase/categoriesService';
+
 // Orders
 import { setOrders, clearOrders } from './features/orders/ordersSlice';
 import { subscribeToAllOrders, subscribeToUserOrders } from './firebase/orderService';
@@ -43,6 +47,7 @@ import CustomerProfile from './pages/customer/CustomerProfile';
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminMenuPage from './pages/admin/AdminMenuPage';
+import AdminCategoriesPage from './pages/admin/AdminCategoriesPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminDeliveryPage from './pages/admin/AdminDeliveryPage';
 
@@ -58,8 +63,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
 
   // Keep refs to unsubscribe functions so we can clean up on user change
-  const unsubInventory = useRef(null);
-  const unsubOrders    = useRef(null);
+  const unsubInventory   = useRef(null);
+  const unsubOrders      = useRef(null);
+  const unsubCategories  = useRef(null);
 
   // ── 1. Firebase Auth listener (runs once on mount) ───────────────────────
   useEffect(() => {
@@ -71,15 +77,21 @@ export default function App() {
 
   // ── 2. Inventory listener (always on — products visible for everyone) ────
   useEffect(() => {
-    // Seed Firestore with default menu if it's the first run
+    // Seed Firestore with default menu + categories if first run
     seedInventoryIfEmpty();
+    seedCategoriesIfEmpty();
 
     unsubInventory.current = subscribeToInventory((products) => {
       dispatch(setProductsList(products));
     });
 
+    unsubCategories.current = subscribeToCategories((cats) => {
+      dispatch(setCategoriesList(cats));
+    });
+
     return () => {
-      if (unsubInventory.current) unsubInventory.current();
+      if (unsubInventory.current)  unsubInventory.current();
+      if (unsubCategories.current) unsubCategories.current();
     };
   }, [dispatch]);
 
@@ -165,10 +177,11 @@ export default function App() {
 
     return (
       <Shell header={adminHeader}>
-        {activeTab === 'admin-dashboard' && <AdminDashboard />}
-        {activeTab === 'admin-menu'      && <AdminMenuPage />}
-        {activeTab === 'admin-orders'    && <AdminOrdersPage />}
-        {activeTab === 'admin-delivery'  && <AdminDeliveryPage />}
+        {activeTab === 'admin-dashboard'  && <AdminDashboard />}
+        {activeTab === 'admin-menu'       && <AdminMenuPage />}
+        {activeTab === 'admin-categories' && <AdminCategoriesPage />}
+        {activeTab === 'admin-orders'     && <AdminOrdersPage />}
+        {activeTab === 'admin-delivery'   && <AdminDeliveryPage />}
       </Shell>
     );
   }

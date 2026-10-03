@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { selectIsAdmin } from '../../features/auth/authSlice';
 import {
   Store, LayoutGrid, Clock, User,
-  ShieldCheck, Layers, ClipboardList, Bike
+  ShieldCheck, Layers, ClipboardList, Bike, Tag
 } from 'lucide-react';
 
 export default function BottomNavbar({ activeTab, onTabChange }) {
@@ -17,10 +17,11 @@ export default function BottomNavbar({ activeTab, onTabChange }) {
   ];
 
   const adminTabs = [
-    { id: 'admin-dashboard', label: 'Dashboard', icon: ShieldCheck },
-    { id: 'admin-menu',      label: 'Menu',       icon: Layers },
-    { id: 'admin-orders',    label: 'Orders',     icon: ClipboardList },
-    { id: 'admin-delivery',  label: 'Delivery',   icon: Bike },
+    { id: 'admin-dashboard',    label: 'Dashboard',  icon: ShieldCheck },
+    { id: 'admin-menu',         label: 'Menu',        icon: Layers },
+    { id: 'admin-categories',   label: 'Categories',  icon: Tag },
+    { id: 'admin-orders',       label: 'Orders',      icon: ClipboardList },
+    { id: 'admin-delivery',     label: 'Delivery',    icon: Bike },
   ];
 
   const tabs = isAdmin ? adminTabs : customerTabs;

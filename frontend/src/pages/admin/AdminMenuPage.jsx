@@ -4,19 +4,22 @@ import {
   selectAllProducts,
   saveInventory,
 } from '../../features/products/productsSlice';
+import { selectCategories } from '../../features/categories/categoriesSlice';
 import {
   Plus, Pencil, Trash2, Save, X, Package, Tag, Layers,
   ToggleLeft, ToggleRight, ImageIcon, ChevronDown
 } from 'lucide-react';
 
-const CATEGORIES = [
-  { id: 'vegetables', label: 'Vegetables', icon: '🥬' },
-  { id: 'fruits',     label: 'Fruits',     icon: '🍎' },
-  { id: 'exotic',     label: 'Exotics',    icon: '🥑' },
-  { id: 'combos',     label: 'Combos',     icon: '🥗' },
-  { id: 'seasonal',   label: 'Seasonal',   icon: '🍌' },
-  { id: 'sprouts',    label: 'Sprouts',    icon: '🌿' },
-];
+// ── Defined OUTSIDE the component so it doesn't remount on every render ────────
+// (putting components inside another component's render body causes keyboard dismiss)
+const inp = 'w-full border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-100 transition';
+
+const FormField = ({ label, children }) => (
+  <div>
+    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wide mb-1 block">{label}</label>
+    {children}
+  </div>
+);
 
 const EMPTY_FORM = {
   id: '',
@@ -35,8 +38,9 @@ const EMPTY_FORM = {
 };
 
 export default function AdminMenuPage() {
-  const dispatch  = useDispatch();
-  const products  = useSelector(selectAllProducts);
+  const dispatch   = useDispatch();
+  const products   = useSelector(selectAllProducts);
+  const CATEGORIES = useSelector(selectCategories);
 
   const [editingId, setEditingId]   = useState(null); // null = no edit, 'new' = adding
   const [form, setForm]             = useState(EMPTY_FORM);
@@ -81,15 +85,6 @@ export default function AdminMenuPage() {
 
   const filtered = filterCat === 'all' ? products : products.filter(p => p.category === filterCat);
 
-  // ── Inline form ───────────────────────────────────────────────────────────────
-  const FormField = ({ label, children }) => (
-    <div>
-      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wide mb-1 block">{label}</label>
-      {children}
-    </div>
-  );
-
-  const inp = "w-full border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-100 transition";
 
   return (
     <div className="pb-28 space-y-3">
