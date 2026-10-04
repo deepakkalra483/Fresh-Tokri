@@ -7,7 +7,8 @@ import {
   setActiveAddress, 
   closeAddressModal 
 } from '../../features/address/addressSlice';
-import { X, MapPin, Search, Plus, Home, Briefcase, Heart, CheckCircle2 } from 'lucide-react';
+import { useGeoLocation } from '../../hooks/useGeoLocation';
+import { X, MapPin, Search, Plus, Home, Briefcase, Heart, CheckCircle2, Loader2, AlertCircle, Navigation } from 'lucide-react';
 
 export default function AddressModal() {
   const dispatch = useDispatch();
@@ -16,6 +17,7 @@ export default function AddressModal() {
   const savedAddresses = useSelector(selectSavedAddresses);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const { status, geoAddress, errorMsg, requestLocation, reset } = useGeoLocation();
 
   if (!isOpen) return null;
 
@@ -25,6 +27,23 @@ export default function AddressModal() {
       addr.flat.toLowerCase().includes(searchQuery.toLowerCase()) ||
       addr.area.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleGpsClick = () => {
+    if (status === 'success' && geoAddress) {
+      // Already fetched — just set it
+      dispatch(setActiveAddress(geoAddress));
+      return;
+    }
+    requestLocation((result) => {
+      dispatch(setActiveAddress(result));
+    });
+  };
+
+  const gpsButtonLabel = () => {
+    if (status === 'loading') return 'Detecting location...';
+    if (status === 'success') return `Use: ${geoAddress?.flat || 'Current Location'}`;
+    return 'Use Current GPS Location';
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-50 flex flex-col justify-end transition-opacity">
@@ -39,7 +58,7 @@ export default function AddressModal() {
             <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Select Delivery Location</h3>
           </div>
           <button 
-            onClick={() => dispatch(closeAddressModal())}
+            onClick={() => { dispatch(closeAddressModal()); reset(); }}
             className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs hover:bg-slate-200"
           >
             <X size={14} />
@@ -59,13 +78,67 @@ export default function AddressModal() {
         </div>
 
         {/* Use Current GPS Location Button */}
-        <button className="w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 p-2.5 rounded-xl flex items-center justify-between text-xs font-bold transition">
-          <div className="flex items-center gap-2">
-            <MapPin size={16} className="text-emerald-600 fill-emerald-100 animate-pulse" />
-            <span>Use Current GPS Location</span>
+        <button
+          onClick={handleGpsClick}
+          disabled={status === 'loading'}
+          className={`w-full border p-2.5 rounded-xl flex items-center justify-between text-xs font-bold transition-all active:scale-[0.98] ${
+            status === 'success'
+              ? 'bg-emerald-600 border-emerald-600 text-white'
+              : status === 'denied' || status === 'error'
+              ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+              : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800'
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {status === 'loading' ? (
+              <Loader2 size={16} className="text-emerald-600 animate-spin flex-shrink-0" />
+            ) : status === 'denied' || status === 'error' ? (
+              <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
+            ) : (
+              <Navigation
+                size={16}
+                className={`flex-shrink-0 ${status === 'success' ? 'text-white fill-white' : 'text-emerald-600'}`}
+              />
+            )}
+            <span className="truncate">{gpsButtonLabel()}</span>
           </div>
-          <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase">AUTO DETECT</span>
+
+          {status === 'loading' ? (
+            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase flex-shrink-0">
+              Fetching...
+            </span>
+          ) : status === 'success' ? (
+            <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full uppercase flex-shrink-0">
+              ✓ Got it
+            </span>
+          ) : (
+            <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase flex-shrink-0">
+              AUTO DETECT
+            </span>
+          )}
         </button>
+
+        {/* Permission Denied / Error Banner */}
+        {(status === 'denied' || status === 'error') && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
+            <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[11px] font-bold text-red-800">Location Access Failed</p>
+              <p className="text-[10px] text-red-600 mt-0.5 leading-relaxed">{errorMsg}</p>
+              {status === 'denied' && (
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Tip: Tap the 🔒 lock icon in your browser address bar → allow Location → then try again.
+                </p>
+              )}
+              <button
+                onClick={reset}
+                className="mt-1.5 text-[10px] font-bold text-red-700 underline"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Saved Addresses List */}
         <div className="space-y-2 pt-1">
@@ -121,4 +194,3 @@ export default function AddressModal() {
     </div>
   );
 }
-

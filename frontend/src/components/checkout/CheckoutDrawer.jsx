@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectIsCheckoutOpen, closeCheckout, selectCartTotals, selectCartItems, clearCart } from '../../features/cart/cartSlice';
 import { selectDeliveryMode } from '../../features/deliveryMode/deliveryModeSlice';
-import { selectActiveAddress } from '../../features/address/addressSlice';
+import { selectActiveAddress, setActiveAddress, openAddressModal } from '../../features/address/addressSlice';
 import { submitOrder } from '../../features/orders/ordersSlice';
 import { selectCurrentUser } from '../../features/auth/authSlice';
-import { X, ShoppingBasket, Home, CheckCircle2, ArrowRight, Zap, Sun, CreditCard, Banknote } from 'lucide-react';
+import { useGeoLocation } from '../../hooks/useGeoLocation';
+import { X, ShoppingBasket, Home, CheckCircle2, ArrowRight, Zap, Sun, CreditCard, Banknote, Navigation, Loader2, AlertCircle, MapPin } from 'lucide-react';
 
 export default function CheckoutDrawer({ onOrderPlaced }) {
   const dispatch      = useDispatch();
@@ -18,8 +19,19 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
   const currentUser   = useSelector(selectCurrentUser);
 
   const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const { status: gpsStatus, errorMsg: gpsError, requestLocation, reset: resetGps } = useGeoLocation();
 
   if (!isOpen) return null;
+
+  // Address is considered "not set" if it's only the static default (no real user selection)
+  const isAddressConfirmed = address && address.id !== 'addr-1' || address?.tag === 'GPS';
+  const needsLocationConfirm = !isAddressConfirmed;
+
+  const handleUseGPS = () => {
+    requestLocation((result) => {
+      dispatch(setActiveAddress(result));
+    });
+  };
 
   const handlePlaceOrder = () => {
     const formattedItems = Object.entries(cartItems).map(([id, qty]) => {
@@ -41,6 +53,7 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
 
     dispatch(clearCart());
     dispatch(closeCheckout());
+    resetGps();
     if (onOrderPlaced) onOrderPlaced();
   };
 
@@ -57,7 +70,7 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
             <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Express Checkout</h3>
           </div>
           <button 
-            onClick={() => dispatch(closeCheckout())}
+            onClick={() => { dispatch(closeCheckout()); resetGps(); }}
             className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs hover:bg-slate-200"
           >
             <X size={14} />
@@ -87,20 +100,92 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
 
         {/* Delivery Address */}
         <div>
-          <div className="text-[11px] font-extrabold text-slate-800 mb-1 flex justify-between">
+          <div className="text-[11px] font-extrabold text-slate-800 mb-1 flex justify-between items-center">
             <span>Delivering To</span>
-            <span className="text-emerald-600 text-[10px] font-bold cursor-pointer">Change Address</span>
+            <button
+              onClick={() => dispatch(openAddressModal())}
+              className="text-emerald-600 text-[10px] font-bold"
+            >
+              Change Address
+            </button>
           </div>
-          <div className="bg-emerald-50/70 border border-emerald-200 p-2 rounded-xl flex items-center justify-between text-xs">
+
+          {/* Address confirmed state */}
+          <div className={`border p-2 rounded-xl flex items-center justify-between text-xs transition-all ${
+            isAddressConfirmed
+              ? 'bg-emerald-50/70 border-emerald-200'
+              : 'bg-amber-50 border-amber-200'
+          }`}>
             <div className="flex items-center gap-2">
-              <Home size={16} className="text-emerald-600" />
+              <Home size={16} className={isAddressConfirmed ? 'text-emerald-600' : 'text-amber-500'} />
               <div>
                 <div className="font-bold text-slate-900 text-[11px]">{address.label} • {address.flat}</div>
                 <div className="text-[9px] text-slate-500">{address.area}</div>
               </div>
             </div>
-            <CheckCircle2 size={18} className="text-emerald-600 fill-emerald-100" />
+            {isAddressConfirmed
+              ? <CheckCircle2 size={18} className="text-emerald-600 fill-emerald-100" />
+              : <span className="text-[9px] text-amber-600 font-bold bg-amber-100 px-1.5 py-0.5 rounded-full">CONFIRM?</span>
+            }
           </div>
+
+          {/* GPS Location prompt — shown when address is not confirmed */}
+          {needsLocationConfirm && (
+            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <MapPin size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-blue-800 font-semibold leading-relaxed">
+                  Confirm your delivery location for accurate delivery.
+                </p>
+              </div>
+
+              {/* GPS Button */}
+              <button
+                onClick={handleUseGPS}
+                disabled={gpsStatus === 'loading'}
+                className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-[11px] font-bold transition-all active:scale-[0.98] ${
+                  gpsStatus === 'success'
+                    ? 'bg-emerald-600 text-white'
+                    : gpsStatus === 'denied' || gpsStatus === 'error'
+                    ? 'bg-red-100 text-red-700 border border-red-200'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {gpsStatus === 'loading' ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Navigation size={13} />
+                )}
+                {gpsStatus === 'loading'
+                  ? 'Detecting your location...'
+                  : gpsStatus === 'success'
+                  ? '✓ Location Detected'
+                  : 'Use My Current Location'}
+              </button>
+
+              {/* Error / Denied message */}
+              {(gpsStatus === 'denied' || gpsStatus === 'error') && (
+                <div className="flex items-start gap-1.5">
+                  <AlertCircle size={12} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] text-red-600 leading-relaxed">{gpsError}</p>
+                    {gpsStatus === 'denied' && (
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Allow from browser settings or <button onClick={() => dispatch(openAddressModal())} className="text-emerald-600 underline font-bold">pick a saved address</button>.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => dispatch(openAddressModal())}
+                className="w-full text-[10px] text-slate-500 underline text-center"
+              >
+                Or choose from saved addresses
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Payment Methods */}
