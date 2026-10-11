@@ -14,6 +14,8 @@ export default defineConfig({
     port: 3000,
     host: true, // Listens on all local network IP addresses for mobile access
     open: true,
+    // Ensures /admin-deepak and other SPA routes work on direct browser refresh
+    historyApiFallback: true,
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

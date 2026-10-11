@@ -1,33 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit';
 
-// Static addresses — no backend needed for this (can add Firebase auth later)
-const initialAddresses = [
-  {
-    id: 'addr-1',
-    label: 'Home',
-    flat: 'Flat 402, Green Valley Apartments',
-    area: 'Sector 62, Mohali, Punjab',
-    tag: 'DEFAULT',
-  },
-  {
-    id: 'addr-2',
-    label: 'Work Office',
-    flat: 'Building 14, Quark City Tech Park',
-    area: 'Phase 8B, Mohali, Punjab',
-    tag: 'WORK',
-  },
-  {
-    id: 'addr-3',
-    label: "Parents' House",
-    flat: 'House #1240, Sector 17',
-    area: 'Chandigarh',
-    tag: 'FAMILY',
-  },
-];
-
 const initialState = {
-  activeAddress: initialAddresses[0],
-  savedAddresses: initialAddresses,
+  activeAddress: null,          // No pre-selected static address
+  savedAddresses: [],           // Starts empty — user adds their own
   isAddressModalOpen: false,
 };
 
@@ -45,14 +20,34 @@ export const addressSlice = createSlice({
     closeAddressModal: (state) => {
       state.isAddressModalOpen = false;
     },
+    saveAddress: (state, action) => {
+      const newAddr = action.payload;
+      // Replace if same id, else push
+      const idx = state.savedAddresses.findIndex((a) => a.id === newAddr.id);
+      if (idx >= 0) {
+        state.savedAddresses[idx] = newAddr;
+      } else {
+        state.savedAddresses.push(newAddr);
+      }
+      state.activeAddress = newAddr;
+      state.isAddressModalOpen = false;
+    },
+    deleteAddress: (state, action) => {
+      state.savedAddresses = state.savedAddresses.filter(
+        (a) => a.id !== action.payload
+      );
+      if (state.activeAddress?.id === action.payload) {
+        state.activeAddress = state.savedAddresses[0] || null;
+      }
+    },
   },
 });
 
-export const { setActiveAddress, openAddressModal, closeAddressModal } =
+export const { setActiveAddress, openAddressModal, closeAddressModal, saveAddress, deleteAddress } =
   addressSlice.actions;
 
-export const selectActiveAddress = (state) => state.address.activeAddress;
-export const selectSavedAddresses = (state) => state.address.savedAddresses;
+export const selectActiveAddress    = (state) => state.address.activeAddress;
+export const selectSavedAddresses   = (state) => state.address.savedAddresses;
 export const selectIsAddressModalOpen = (state) => state.address.isAddressModalOpen;
 
 export default addressSlice.reducer;

@@ -2,19 +2,31 @@
  * App.jsx
  * Root component — manages:
  * 1. Firebase Auth state listener (onAuthStateChanged → setAuthUser)
- * 2. Inventory real-time listener (subscribeToInventory → setProductsList)
- * 3. Orders real-time listener — admin gets all orders, customer gets own orders
- * 4. Role-based UI rendering (Login | Admin Shell | Customer Shell)
+ * 2. Inventory + Categories real-time listeners (always on — no auth required)
+ * 3. Orders real-time listener — starts only after login
+ * 4. URL-based routing:
+ *    - /admin-deepak  → Admin login screen → Admin shell
+ *    - everything else → Customer shell (no auth gate — browse freely)
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 
 // Auth
-import { setAuthUser, selectIsLoggedIn, selectIsAdmin, selectAuthLoading, selectCurrentUser } from './features/auth/authSlice';
+import {
+  setAuthUser,
+  selectIsLoggedIn,
+  selectIsAdmin,
+  selectAuthLoading,
+  selectCurrentUser,
+  selectOTPModalOpen,
+  openOTPModal,
+  setUserAfterOTP,
+} from './features/auth/authSlice';
 import { subscribeToAuthState } from './firebase/authService';
 
 // Inventory
-import { setProductsList, setProductsError } from './features/products/productsSlice';
+import { setProductsList } from './features/products/productsSlice';
 import { subscribeToInventory, seedInventoryIfEmpty } from './firebase/inventoryService';
 
 // Categories
@@ -22,7 +34,10 @@ import { setCategoriesList } from './features/categories/categoriesSlice';
 import { subscribeToCategories, seedCategoriesIfEmpty } from './firebase/categoriesService';
 
 // Orders
-import { setOrders, clearOrders } from './features/orders/ordersSlice';
+import { setOrders, clearOrders, submitOrder } from './features/orders/ordersSlice';
+import { clearCart, selectCartItems, closeCheckout } from './features/cart/cartSlice';
+import { selectDeliveryMode } from './features/deliveryMode/deliveryModeSlice';
+import { selectActiveAddress } from './features/address/addressSlice';
 import { subscribeToAllOrders, subscribeToUserOrders } from './firebase/orderService';
 
 // Layout
@@ -34,9 +49,10 @@ import BottomNavbar from './components/layout/BottomNavbar';
 import CheckoutDrawer from './components/checkout/CheckoutDrawer';
 import ProductDetailsModal from './components/home/ProductDetailsModal';
 import AddressModal from './components/address/AddressModal';
+import OTPModal from './components/auth/OTPModal';
 
-// Auth Screen
-import LoginScreen from './components/auth/LoginScreen';
+// Auth Screens
+import AdminLoginScreen from './components/auth/AdminLoginScreen';
 
 // Customer Pages
 import HomePage from './pages/HomePage';
@@ -53,21 +69,96 @@ import AdminDeliveryPage from './pages/admin/AdminDeliveryPage';
 
 import { Leaf, Loader2 } from 'lucide-react';
 
+// ── App shell wrapper ──────────────────────────────────────────────────────────
+function Shell({ header, children, bottomNav }) {
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-0 md:p-4 font-sans antialiased select-none">
+      <div className="w-full max-w-md h-screen md:h-[850px] md:max-h-[900px] bg-slate-50 md:rounded-3xl shadow-xl relative overflow-hidden flex flex-col border-0 md:border border-slate-200">
+        {header}
+        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+          {children}
+        </div>
+        {bottomNav}
+      </div>
+    </div>
+  );
+}
+
+// ── Customer App ───────────────────────────────────────────────────────────────
+function CustomerApp({ onOrderPlaced }) {
+  const [activeTab, setActiveTab] = useState('home');
+
+  return (
+    <Shell
+      header={activeTab === 'home' ? <StickyHeader onTabChange={setActiveTab} /> : null}
+      bottomNav={<BottomNavbar activeTab={activeTab} onTabChange={setActiveTab} />}
+    >
+      {activeTab === 'home'       && <HomePage />}
+      {activeTab === 'categories' && <CategoriesPage onBackToHome={() => setActiveTab('home')} />}
+      {activeTab === 'orders'     && <OrdersPage />}
+      {activeTab === 'profile'    && <CustomerProfile />}
+
+      <FloatingCartBar />
+      <CheckoutDrawer onOrderPlaced={() => { onOrderPlaced?.(); setActiveTab('orders'); }} />
+      <ProductDetailsModal />
+      <AddressModal />
+    </Shell>
+  );
+}
+
+// ── Admin App ──────────────────────────────────────────────────────────────────
+function AdminApp({ currentUser }) {
+  const [activeTab, setActiveTab] = useState('admin-dashboard');
+
+  const adminHeader = (
+    <div className="flex-shrink-0 bg-gradient-to-r from-emerald-700 to-emerald-600 px-4 pt-safe pt-3 pb-3 flex items-center justify-between shadow-sm">
+      <div>
+        <span className="text-[9px] text-emerald-200 font-semibold uppercase tracking-widest">Admin Panel</span>
+        <h1 className="text-sm font-extrabold text-white leading-none">Fresh Tokri</h1>
+      </div>
+      <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center text-[11px] font-extrabold text-white">
+        {currentUser?.name?.slice(0, 2).toUpperCase() || 'AD'}
+      </div>
+    </div>
+  );
+
+  return (
+    <Shell
+      header={adminHeader}
+      bottomNav={<BottomNavbar activeTab={activeTab} onTabChange={setActiveTab} />}
+    >
+      {activeTab === 'admin-dashboard'  && <AdminDashboard />}
+      {activeTab === 'admin-menu'       && <AdminMenuPage />}
+      {activeTab === 'admin-categories' && <AdminCategoriesPage />}
+      {activeTab === 'admin-orders'     && <AdminOrdersPage />}
+      {activeTab === 'admin-delivery'   && <AdminDeliveryPage />}
+    </Shell>
+  );
+}
+
+// ── Root ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const dispatch    = useDispatch();
   const isLoggedIn  = useSelector(selectIsLoggedIn);
   const isAdmin     = useSelector(selectIsAdmin);
   const authLoading = useSelector(selectAuthLoading);
   const currentUser = useSelector(selectCurrentUser);
+  const otpOpen     = useSelector(selectOTPModalOpen);
 
-  const [activeTab, setActiveTab] = useState('home');
+  // For post-OTP order submission
+  const cartItems   = useSelector(selectCartItems);
+  const mode        = useSelector(selectDeliveryMode);
+  const address     = useSelector(selectActiveAddress);
+  const products    = useSelector((state) => state.products.productsList);
 
-  // Keep refs to unsubscribe functions so we can clean up on user change
-  const unsubInventory   = useRef(null);
-  const unsubOrders      = useRef(null);
-  const unsubCategories  = useRef(null);
+  const unsubInventory  = useRef(null);
+  const unsubOrders     = useRef(null);
+  const unsubCategories = useRef(null);
 
-  // ── 1. Firebase Auth listener (runs once on mount) ───────────────────────
+  const location = useLocation();
+  const isAdminRoute = location.pathname === '/admin-deepak';
+
+  // ── 1. Firebase Auth listener ──────────────────────────────────────────────
   useEffect(() => {
     const unsubAuth = subscribeToAuthState((profile) => {
       dispatch(setAuthUser(profile));
@@ -75,16 +166,14 @@ export default function App() {
     return () => unsubAuth();
   }, [dispatch]);
 
-  // ── 2. Inventory listener (always on — products visible for everyone) ────
+  // ── 2. Inventory + categories (always on) ─────────────────────────────────
   useEffect(() => {
-    // Seed Firestore with default menu + categories if first run
     seedInventoryIfEmpty();
     seedCategoriesIfEmpty();
 
     unsubInventory.current = subscribeToInventory((products) => {
       dispatch(setProductsList(products));
     });
-
     unsubCategories.current = subscribeToCategories((cats) => {
       dispatch(setCategoriesList(cats));
     });
@@ -95,9 +184,8 @@ export default function App() {
     };
   }, [dispatch]);
 
-  // ── 3. Orders listener — depends on role and login state ────────────────
+  // ── 3. Orders listener (only when logged in) ───────────────────────────────
   useEffect(() => {
-    // Clean up old listener
     if (unsubOrders.current) {
       unsubOrders.current();
       unsubOrders.current = null;
@@ -109,28 +197,15 @@ export default function App() {
     }
 
     if (isAdmin) {
-      // Admin sees ALL orders in real time
-      unsubOrders.current = subscribeToAllOrders((orders) => {
-        dispatch(setOrders(orders));
-      });
+      unsubOrders.current = subscribeToAllOrders((orders) => dispatch(setOrders(orders)));
     } else {
-      // Customer sees only their own orders
-      unsubOrders.current = subscribeToUserOrders(currentUser.uid, (orders) => {
-        dispatch(setOrders(orders));
-      });
+      unsubOrders.current = subscribeToUserOrders(currentUser.uid, (orders) => dispatch(setOrders(orders)));
     }
 
-    return () => {
-      if (unsubOrders.current) unsubOrders.current();
-    };
+    return () => { if (unsubOrders.current) unsubOrders.current(); };
   }, [isLoggedIn, isAdmin, currentUser?.uid, dispatch]);
 
-  // ── 4. Reset tab when role changes ──────────────────────────────────────
-  useEffect(() => {
-    setActiveTab(isAdmin ? 'admin-dashboard' : 'home');
-  }, [isAdmin, isLoggedIn]);
-
-  // ── Loading screen while Firebase resolves initial auth ─────────────────
+  // ── Loading splash ─────────────────────────────────────────────────────────
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-900 flex flex-col items-center justify-center gap-4">
@@ -143,61 +218,60 @@ export default function App() {
     );
   }
 
-  // ── Not logged in ────────────────────────────────────────────────────────
-  if (!isLoggedIn) {
-    return <LoginScreen />;
-  }
+  /**
+   * Called by OTPModal after successful phone verification.
+   * If there was a pending 'checkout' action, we immediately submit the order.
+   */
+  const handleOTPSuccess = (profile, pendingAction) => {
+    if (pendingAction === 'checkout' && address) {
+      const formattedItems = Object.entries(cartItems).map(([id, qty]) => {
+        const p = products.find((x) => x.id === id);
+        if (!p) return null;
+        const price = mode === 'instant' ? p.priceInstant : p.priceMorning;
+        return { id: p.id, name: `${p.name} (${p.weight})`, price, qty };
+      }).filter(Boolean);
 
-  // ── App shell wrapper ────────────────────────────────────────────────────
-  const Shell = ({ header, children }) => (
-    <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-0 md:p-4 font-sans antialiased select-none">
-      <div className="w-full max-w-md h-screen md:h-[850px] md:max-h-[900px] bg-slate-50 md:rounded-3xl shadow-xl relative overflow-hidden flex flex-col border-0 md:border border-slate-200">
-        {header}
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
-          {children}
-        </div>
-        <BottomNavbar activeTab={activeTab} onTabChange={setActiveTab} />
-      </div>
-    </div>
-  );
+      const totals = formattedItems.reduce(
+        (acc, item) => ({ ...acc, finalTotal: acc.finalTotal + item.price * item.qty }),
+        { finalTotal: 0 }
+      );
 
-  // ── Admin Shell ──────────────────────────────────────────────────────────
-  if (isAdmin) {
-    const adminHeader = (
-      <div className="flex-shrink-0 bg-gradient-to-r from-emerald-700 to-emerald-600 px-4 pt-safe pt-3 pb-3 flex items-center justify-between shadow-sm">
-        <div>
-          <span className="text-[9px] text-emerald-200 font-semibold uppercase tracking-widest">Admin Panel</span>
-          <h1 className="text-sm font-extrabold text-white leading-none">Fresh Tokri</h1>
-        </div>
-        <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center text-[11px] font-extrabold text-white">
-          {currentUser?.name?.slice(0, 2).toUpperCase() || 'AD'}
-        </div>
-      </div>
-    );
+      dispatch(submitOrder({
+        userId:          profile.uid,
+        customerName:    profile.name || profile.phone || 'Customer',
+        items:           formattedItems,
+        mode,
+        total:           totals.finalTotal,
+        paymentMethod:   'COD',
+        deliveryAddress: `${address.label} (${address.tag}) • ${address.flat}, ${address.area}`,
+      }));
+      dispatch(clearCart());
+      dispatch(closeCheckout());
+    }
+  };
 
-    return (
-      <Shell header={adminHeader}>
-        {activeTab === 'admin-dashboard'  && <AdminDashboard />}
-        {activeTab === 'admin-menu'       && <AdminMenuPage />}
-        {activeTab === 'admin-categories' && <AdminCategoriesPage />}
-        {activeTab === 'admin-orders'     && <AdminOrdersPage />}
-        {activeTab === 'admin-delivery'   && <AdminDeliveryPage />}
-      </Shell>
-    );
-  }
-
-  // ── Customer Shell ───────────────────────────────────────────────────────
   return (
-    <Shell header={activeTab === 'home' ? <StickyHeader onTabChange={setActiveTab} /> : null}>
-      {activeTab === 'home'       && <HomePage />}
-      {activeTab === 'categories' && <CategoriesPage onBackToHome={() => setActiveTab('home')} />}
-      {activeTab === 'orders'     && <OrdersPage />}
-      {activeTab === 'profile'    && <CustomerProfile />}
+    <>
+      <Routes>
+        {/* ── /admin-deepak — Secret admin route ── */}
+        <Route
+          path="/admin-deepak"
+          element={
+            isAdmin
+              ? <AdminApp currentUser={currentUser} />
+              : <AdminLoginScreen />
+          }
+        />
 
-      <FloatingCartBar />
-      <CheckoutDrawer onOrderPlaced={() => setActiveTab('orders')} />
-      <ProductDetailsModal />
-      <AddressModal />
-    </Shell>
+        {/* ── All other routes → Customer shell (no auth gate) ── */}
+        <Route
+          path="*"
+          element={<CustomerApp onOrderPlaced={null} />}
+        />
+      </Routes>
+
+      {/* OTP Modal — rendered at root level so it floats above everything */}
+      <OTPModal onLoginSuccess={handleOTPSuccess} />
+    </>
   );
 }

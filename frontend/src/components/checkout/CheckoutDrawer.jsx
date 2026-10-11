@@ -4,9 +4,16 @@ import { selectIsCheckoutOpen, closeCheckout, selectCartTotals, selectCartItems,
 import { selectDeliveryMode } from '../../features/deliveryMode/deliveryModeSlice';
 import { selectActiveAddress, setActiveAddress, openAddressModal } from '../../features/address/addressSlice';
 import { submitOrder } from '../../features/orders/ordersSlice';
-import { selectCurrentUser } from '../../features/auth/authSlice';
+import { selectCurrentUser, selectIsLoggedIn, openOTPModal } from '../../features/auth/authSlice';
 import { useGeoLocation } from '../../hooks/useGeoLocation';
-import { X, ShoppingBasket, Home, CheckCircle2, ArrowRight, Zap, Sun, CreditCard, Banknote, Navigation, Loader2, AlertCircle, MapPin } from 'lucide-react';
+import { X, ShoppingBasket, Home, Briefcase, Heart, Navigation as NavIcon, CheckCircle2, ArrowRight, Zap, Sun, CreditCard, Banknote, Navigation, Loader2, AlertCircle, MapPin, LogIn } from 'lucide-react';
+
+const tagIcon = (tag) => {
+  if (tag === 'WORK')  return <Briefcase size={16} />;
+  if (tag === 'OTHER') return <Heart size={16} />;
+  if (tag === 'GPS')   return <NavIcon size={16} />;
+  return <Home size={16} />;
+};
 
 export default function CheckoutDrawer({ onOrderPlaced }) {
   const dispatch      = useDispatch();
@@ -17,14 +24,15 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
   const address       = useSelector(selectActiveAddress);
   const products      = useSelector((state) => state.products.productsList);
   const currentUser   = useSelector(selectCurrentUser);
+  const isLoggedIn    = useSelector(selectIsLoggedIn);
 
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const { status: gpsStatus, errorMsg: gpsError, requestLocation, reset: resetGps } = useGeoLocation();
 
   if (!isOpen) return null;
 
-  // Address is considered "not set" if it's only the static default (no real user selection)
-  const isAddressConfirmed = address && address.id !== 'addr-1' || address?.tag === 'GPS';
+  // Address is confirmed when user has actively selected/saved one
+  const isAddressConfirmed = !!address;
   const needsLocationConfirm = !isAddressConfirmed;
 
   const handleUseGPS = () => {
@@ -34,6 +42,16 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
   };
 
   const handlePlaceOrder = () => {
+    if (!address) return; // guard: must have an address
+
+    // ── Not logged in → open OTP modal, order will be placed after login ──
+    if (!isLoggedIn) {
+      dispatch(closeCheckout());
+      dispatch(openOTPModal('checkout'));
+      return;
+    }
+
+    // ── Already logged in → place order directly ──
     const formattedItems = Object.entries(cartItems).map(([id, qty]) => {
       const p = products.find((x) => x.id === id);
       if (!p) return null;
@@ -42,13 +60,13 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
     }).filter(Boolean);
 
     dispatch(submitOrder({
-      userId:          currentUser?.uid  || 'guest',
-      customerName:    currentUser?.name || 'Customer',
+      userId:          currentUser?.uid,
+      customerName:    currentUser?.name || currentUser?.phone || 'Customer',
       items:           formattedItems,
       mode,
       total:           totals.finalTotal,
       paymentMethod,
-      deliveryAddress: `${address.label} • ${address.flat}, ${address.area}`,
+      deliveryAddress: `${address.label} (${address.tag}) • ${address.flat}, ${address.area}`,
     }));
 
     dispatch(clearCart());
@@ -100,46 +118,44 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
 
         {/* Delivery Address */}
         <div>
-          <div className="text-[11px] font-extrabold text-slate-800 mb-1 flex justify-between items-center">
-            <span>Delivering To</span>
+          <div className="text-[11px] font-extrabold text-slate-800 mb-1.5 flex justify-between items-center">
+            <span>📦 Delivering To</span>
             <button
               onClick={() => dispatch(openAddressModal())}
-              className="text-emerald-600 text-[10px] font-bold"
+              className="text-emerald-600 text-[10px] font-bold hover:underline"
             >
               Change Address
             </button>
           </div>
 
-          {/* Address confirmed state */}
-          <div className={`border p-2 rounded-xl flex items-center justify-between text-xs transition-all ${
-            isAddressConfirmed
-              ? 'bg-emerald-50/70 border-emerald-200'
-              : 'bg-amber-50 border-amber-200'
-          }`}>
-            <div className="flex items-center gap-2">
-              <Home size={16} className={isAddressConfirmed ? 'text-emerald-600' : 'text-amber-500'} />
-              <div>
-                <div className="font-bold text-slate-900 text-[11px]">{address.label} • {address.flat}</div>
-                <div className="text-[9px] text-slate-500">{address.area}</div>
+          {isAddressConfirmed ? (
+            /* Address confirmed — show full details clearly */
+            <div className="bg-emerald-50/70 border border-emerald-300 p-3 rounded-xl flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0">
+                {tagIcon(address.tag)}
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-extrabold text-slate-900">{address.label}</span>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase">
+                    {address.tag}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-700 font-semibold mt-0.5 truncate">{address.flat}</p>
+                <p className="text-[10px] text-slate-500 truncate">{address.area}</p>
+              </div>
+              <CheckCircle2 size={18} className="text-emerald-600 fill-emerald-100 flex-shrink-0 mt-0.5" />
             </div>
-            {isAddressConfirmed
-              ? <CheckCircle2 size={18} className="text-emerald-600 fill-emerald-100" />
-              : <span className="text-[9px] text-amber-600 font-bold bg-amber-100 px-1.5 py-0.5 rounded-full">CONFIRM?</span>
-            }
-          </div>
-
-          {/* GPS Location prompt — shown when address is not confirmed */}
-          {needsLocationConfirm && (
-            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
+          ) : (
+            /* No address set yet */
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
               <div className="flex items-start gap-2">
-                <MapPin size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[11px] text-blue-800 font-semibold leading-relaxed">
-                  Confirm your delivery location for accurate delivery.
+                <MapPin size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-800 font-semibold leading-relaxed">
+                  No delivery address selected. Please set one to place your order.
                 </p>
               </div>
 
-              {/* GPS Button */}
               <button
                 onClick={handleUseGPS}
                 disabled={gpsStatus === 'loading'}
@@ -163,7 +179,6 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
                   : 'Use My Current Location'}
               </button>
 
-              {/* Error / Denied message */}
               {(gpsStatus === 'denied' || gpsStatus === 'error') && (
                 <div className="flex items-start gap-1.5">
                   <AlertCircle size={12} className="text-red-400 flex-shrink-0 mt-0.5" />
@@ -171,7 +186,13 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
                     <p className="text-[10px] text-red-600 leading-relaxed">{gpsError}</p>
                     {gpsStatus === 'denied' && (
                       <p className="text-[10px] text-slate-400 mt-0.5">
-                        Allow from browser settings or <button onClick={() => dispatch(openAddressModal())} className="text-emerald-600 underline font-bold">pick a saved address</button>.
+                        Allow from browser settings or{' '}
+                        <button
+                          onClick={() => dispatch(openAddressModal())}
+                          className="text-emerald-600 underline font-bold"
+                        >
+                          pick a saved address
+                        </button>.
                       </p>
                     )}
                   </div>
@@ -243,12 +264,28 @@ export default function CheckoutDrawer({ onOrderPlaced }) {
         </div>
 
         {/* Place Order CTA Button */}
-        <button 
+        <button
           onClick={handlePlaceOrder}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider active:scale-[0.99]"
+          disabled={!isAddressConfirmed}
+          className={`w-full font-extrabold py-3 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider active:scale-[0.99] ${
+            isAddressConfirmed
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+          }`}
         >
-          <span>PLACE ORDER NOW (₹{totals.finalTotal})</span>
-          <ArrowRight size={14} />
+          {!isAddressConfirmed ? (
+            <span>Set Delivery Address to Continue</span>
+          ) : !isLoggedIn ? (
+            <>
+              <LogIn size={14} />
+              <span>Login to Place Order (₹{totals.finalTotal})</span>
+            </>
+          ) : (
+            <>
+              <span>Place Order Now (₹{totals.finalTotal})</span>
+              <ArrowRight size={14} />
+            </>
+          )}
         </button>
 
       </div>

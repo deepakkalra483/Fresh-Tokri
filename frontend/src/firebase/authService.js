@@ -1,21 +1,45 @@
 /**
  * authService.js
- * Firebase Auth helpers — sign up, sign in, sign out, fetch user profile from Firestore.
- * The `users/{uid}` document stores: { name, email, role: 'admin'|'customer', createdAt }
+ * Firebase Auth helpers — Phone OTP (customer) + Email/Password (admin).
+ * Phone Auth uses invisible reCAPTCHA (user never sees it).
+ * The `users/{uid}` document stores: { name, phone, role: 'admin'|'customer', createdAt }
  * Admin role is set manually in Firestore for security.
  */
 import {
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  updateProfile,
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db } from './config';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── reCAPTCHA (invisible) ─────────────────────────────────────────────────────
+
+let recaptchaVerifier = null;
+
+/**
+ * Initialise or reuse the invisible reCAPTCHA verifier.
+ * `containerId` must be the id of a <div> rendered in the DOM.
+ */
+export const getRecaptchaVerifier = (containerId = 'recaptcha-container') => {
+  // Clear previous instance if it exists (avoid duplicate reCAPTCHA widgets)
+  if (recaptchaVerifier) {
+    try { recaptchaVerifier.clear(); } catch (_) {}
+    recaptchaVerifier = null;
+  }
+  recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+    size: 'invisible',
+    callback: () => {}, // fires silently
+  });
+  return recaptchaVerifier;
+};
+
+// ── Firestore profile helpers ────────────────────────────────────────────────
 
 /** Fetch the user profile doc from Firestore. Returns null if not found. */
 export const getUserProfile = async (uid) => {
@@ -28,32 +52,68 @@ export const getUserProfile = async (uid) => {
   }
 };
 
-/** Create a new user profile doc (called on first sign-up). */
-const createUserProfile = async (uid, name, email) => {
-  await setDoc(doc(db, 'users', uid), {
-    name,
-    email,
-    role: 'customer',    // default; admin must be set in Firestore console
-    createdAt: serverTimestamp(),
-  });
-  return { uid, name, email, role: 'customer' };
+/** Create or update user profile doc in Firestore. */
+export const createOrUpdateUserProfile = async (uid, fields) => {
+  const ref = doc(db, 'users', uid);
+  const existing = await getDoc(ref);
+  if (!existing.exists()) {
+    await setDoc(ref, {
+      role: 'customer',
+      createdAt: serverTimestamp(),
+      ...fields,
+    });
+  } else if (fields.name) {
+    // Only update name if provided (don't overwrite role)
+    await setDoc(ref, { name: fields.name }, { merge: true });
+  }
+  const snap = await getDoc(ref);
+  return { uid, ...snap.data() };
 };
 
-// ── Auth operations ──────────────────────────────────────────────────────────
+// ── Phone OTP Auth ────────────────────────────────────────────────────────────
 
-/** Sign up a new customer and create their Firestore profile. */
-export const signUpWithEmail = async (email, password, name) => {
-  const cred = await createUserWithEmailAndPassword(auth, email, password);
-  const profile = await createUserProfile(cred.user.uid, name || email.split('@')[0], email);
+/**
+ * Step 1: Send OTP to a phone number.
+ * Returns a Firebase ConfirmationResult object.
+ * phoneNumber must include country code e.g. "+919876543210"
+ */
+export const sendOTP = async (phoneNumber, containerId = 'recaptcha-container') => {
+  const verifier = getRecaptchaVerifier(containerId);
+  const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifier);
+  return confirmationResult;
+};
+
+/**
+ * Step 2: Verify the OTP and sign in.
+ * Returns the user profile from Firestore (creates one if first time).
+ * Optionally saves `name` to the profile.
+ */
+export const verifyOTP = async (confirmationResult, otp, name = '') => {
+  const cred = await confirmationResult.confirm(otp);
+  const { user } = cred;
+
+  // Update Firebase Auth displayName if name provided
+  if (name.trim()) {
+    await updateProfile(user, { displayName: name.trim() });
+  }
+
+  // Create or fetch Firestore profile
+  const profile = await createOrUpdateUserProfile(user.uid, {
+    phone: user.phoneNumber,
+    name: name.trim() || user.displayName || user.phoneNumber,
+  });
+
   return profile;
 };
 
-/** Sign in and load existing Firestore profile. Creates one if missing (legacy). */
+// ── Email/Password Auth (Admin only) ─────────────────────────────────────────
+
+/** Admin sign in with email + password. */
 export const signInWithEmail = async (email, password) => {
   const cred = await signInWithEmailAndPassword(auth, email, password);
   let profile = await getUserProfile(cred.user.uid);
   if (!profile) {
-    profile = await createUserProfile(cred.user.uid, email.split('@')[0], email);
+    profile = { uid: cred.user.uid, email: cred.user.email, name: 'Admin', role: 'admin' };
   }
   return profile;
 };
@@ -63,17 +123,26 @@ export const signOutUser = async () => {
   await signOut(auth);
 };
 
+// ── Auth State Listener ───────────────────────────────────────────────────────
+
 /**
  * Subscribe to Firebase Auth state changes.
- * On each auth change, also fetches the Firestore user profile.
- * Calls `callback({ uid, name, email, role } | null)`.
+ * On each auth change, fetches the Firestore user profile.
+ * Calls `callback({ uid, name, phone, role } | null)`.
  * Returns the unsubscribe function.
  */
 export const subscribeToAuthState = (callback) => {
   return onAuthStateChanged(auth, async (firebaseUser) => {
     if (firebaseUser) {
       const profile = await getUserProfile(firebaseUser.uid);
-      callback(profile || { uid: firebaseUser.uid, email: firebaseUser.email, name: firebaseUser.displayName || firebaseUser.email, role: 'customer' });
+      callback(
+        profile || {
+          uid: firebaseUser.uid,
+          phone: firebaseUser.phoneNumber,
+          name: firebaseUser.displayName || firebaseUser.phoneNumber || 'Customer',
+          role: 'customer',
+        }
+      );
     } else {
       callback(null);
     }
