@@ -37,13 +37,16 @@ export default function StickyHeader({ onTabChange }) {
               />
             </div>
 
-            <p className="text-[10px] text-slate-500 font-medium truncate max-w-[180px] mt-0.5">
+            <p className="text-[10px] text-slate-500 font-medium truncate max-w-[200px] mt-0.5 leading-tight">
               {activeAddress
-                ? [activeAddress.flat, activeAddress.area]
-                  .filter(Boolean)
-                  .join(', ') || 'Address details unavailable'
+                ? activeAddress.flat || 'Address details unavailable'
                 : 'Tap here to add delivery address'}
             </p>
+            {activeAddress?.area && (
+              <p className="text-[10px] text-slate-400 truncate max-w-[200px] leading-tight">
+                {activeAddress.area}
+              </p>
+            )}
           </div>
         </div>
 

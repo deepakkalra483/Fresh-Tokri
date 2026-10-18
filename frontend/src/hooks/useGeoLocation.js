@@ -1,4 +1,4 @@
-﻿/**
+/**
  * useGeoLocation.js
  * Custom hook — handles browser Geolocation + Nominatim reverse geocoding.
  * NEVER asks for permission automatically. Only fires when `requestLocation()` is called.
@@ -31,15 +31,28 @@ export function useGeoLocation() {
           const data = await res.json();
           const addr = data.address || {};
 
+          // Build a rich street-level line
+          // e.g. "12, Shivaji Nagar, Near Bus Stand, MG Road"
           const flat =
-            [addr.road, addr.neighbourhood, addr.suburb]
+            [
+              addr.house_number,
+              addr.amenity || addr.building || addr.shop || addr.office,
+              addr.road || addr.pedestrian || addr.footway,
+              addr.neighbourhood || addr.quarter,
+              addr.suburb || addr.village_residential,
+            ]
               .filter(Boolean)
-              .join(", ") || "Current Location";
+              .join(', ') || data.display_name?.split(',').slice(0, 3).join(',').trim() || 'Current Location';
 
-          const area =
-            [addr.city || addr.town || addr.village, addr.state_district, addr.state]
-              .filter(Boolean)
-              .join(", ") || "";
+          // Build a city/district/state line with pincode
+          // e.g. "Bhiwani, Haryana 127021"
+          const cityPart = addr.city || addr.town || addr.municipality || addr.village || addr.hamlet || '';
+          const districtPart = addr.state_district || addr.county || '';
+          const statePart = addr.state || '';
+          const pincode = addr.postcode || '';
+
+          const areaParts = [cityPart, districtPart !== cityPart ? districtPart : '', statePart].filter(Boolean);
+          const area = (areaParts.join(', ') + (pincode ? ` ${pincode}` : '')).trim();
 
           const result = {
             id: "gps-current",

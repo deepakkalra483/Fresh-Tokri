@@ -78,7 +78,7 @@ export const authSlice = createSlice({
       state.otpModalOpen     = false;
       state.otpPendingAction = null;
     },
-    /** Called right after verifyOTP succeeds — sets user without full page reload */
+    /** Called after phone sign-in succeeds — sets user without full page reload */
     setUserAfterOTP: (state, action) => {
       const profile = action.payload;
       state.isLoggedIn     = true;

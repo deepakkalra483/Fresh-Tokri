@@ -1,47 +1,48 @@
 /**
  * authService.js
- * Firebase Auth helpers — Phone OTP (customer) + Email/Password (admin).
- * Phone Auth uses invisible reCAPTCHA (user never sees it).
- * The `users/{uid}` document stores: { name, phone, role: 'admin'|'customer', createdAt }
- * Admin role is set manually in Firestore for security.
+ * Auth helpers — NO Firebase Phone Auth or Anonymous Auth needed.
+ *
+ * Customers : phone number collected → profile saved to Firestore with a
+ *             locally-generated UID → session persisted in localStorage.
+ *             Phone is verified at delivery time (not at sign-in).
+ *
+ * Admin     : email + password via Firebase Auth (unchanged).
+ *
+ * Firestore `users/{uid}` shape: { name, phone, role, createdAt, phoneVerified }
  */
 import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  updateProfile,
 } from 'firebase/auth';
 import {
-  doc, getDoc, setDoc, serverTimestamp,
+  doc, getDoc, setDoc, query, collection, where, getDocs, serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db } from './config';
 
-// ── reCAPTCHA (invisible) ─────────────────────────────────────────────────────
+// ── localStorage session key ──────────────────────────────────────────────────
+const SESSION_KEY = 'ft_customer_session'; // stores { uid, name, phone, role }
 
-let recaptchaVerifier = null;
-
-/**
- * Initialise or reuse the invisible reCAPTCHA verifier.
- * `containerId` must be the id of a <div> rendered in the DOM.
- */
-export const getRecaptchaVerifier = (containerId = 'recaptcha-container') => {
-  // Clear previous instance if it exists (avoid duplicate reCAPTCHA widgets)
-  if (recaptchaVerifier) {
-    try { recaptchaVerifier.clear(); } catch (_) {}
-    recaptchaVerifier = null;
-  }
-  recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-    size: 'invisible',
-    callback: () => {}, // fires silently
-  });
-  return recaptchaVerifier;
+export const saveCustomerSession = (profile) => {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(profile));
 };
 
-// ── Firestore profile helpers ────────────────────────────────────────────────
+export const loadCustomerSession = () => {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
 
-/** Fetch the user profile doc from Firestore. Returns null if not found. */
+export const clearCustomerSession = () => {
+  localStorage.removeItem(SESSION_KEY);
+};
+
+// ── Firestore profile helpers ─────────────────────────────────────────────────
+
+/** Fetch a user profile doc. Returns null if not found. */
 export const getUserProfile = async (uid) => {
   try {
     const snap = await getDoc(doc(db, 'users', uid));
@@ -60,49 +61,59 @@ export const createOrUpdateUserProfile = async (uid, fields) => {
     await setDoc(ref, {
       role: 'customer',
       createdAt: serverTimestamp(),
+      phoneVerified: false,
       ...fields,
     });
-  } else if (fields.name) {
-    // Only update name if provided (don't overwrite role)
-    await setDoc(ref, { name: fields.name }, { merge: true });
+  } else {
+    const updates = {};
+    if (fields.name)  updates.name  = fields.name;
+    if (fields.phone) updates.phone = fields.phone;
+    if (Object.keys(updates).length) {
+      await setDoc(ref, updates, { merge: true });
+    }
   }
   const snap = await getDoc(ref);
   return { uid, ...snap.data() };
 };
 
-// ── Phone OTP Auth ────────────────────────────────────────────────────────────
+// ── Phone-only Sign In (no Firebase Auth, no OTP) ────────────────────────────
 
 /**
- * Step 1: Send OTP to a phone number.
- * Returns a Firebase ConfirmationResult object.
- * phoneNumber must include country code e.g. "+919876543210"
+ * Register or return a customer by phone number only.
+ * Generates a stable UID from the phone (so the same phone always maps to the
+ * same Firestore doc) and persists the session to localStorage.
+ *
+ * Returns the user profile { uid, name, phone, role }.
  */
-export const sendOTP = async (phoneNumber, containerId = 'recaptcha-container') => {
-  const verifier = getRecaptchaVerifier(containerId);
-  const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifier);
-  return confirmationResult;
-};
+export const signInWithPhone = async (phone, name = '') => {
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length !== 10) throw new Error('Please enter a valid 10-digit phone number.');
 
-/**
- * Step 2: Verify the OTP and sign in.
- * Returns the user profile from Firestore (creates one if first time).
- * Optionally saves `name` to the profile.
- */
-export const verifyOTP = async (confirmationResult, otp, name = '') => {
-  const cred = await confirmationResult.confirm(otp);
-  const { user } = cred;
+  const fullPhone = `+91${cleaned}`;
 
-  // Update Firebase Auth displayName if name provided
-  if (name.trim()) {
-    await updateProfile(user, { displayName: name.trim() });
+  // Derive a deterministic UID from the phone number so the same phone always
+  // maps to the same Firestore document.
+  const uid = `phone_${cleaned}`;
+
+  // Check if Firestore doc already exists for this phone
+  const existing = await getUserProfile(uid);
+
+  let profile;
+  if (existing) {
+    // Returning customer — optionally update name
+    profile = existing;
+    if (name.trim() && name.trim() !== existing.name) {
+      profile = await createOrUpdateUserProfile(uid, { name: name.trim() });
+    }
+  } else {
+    // New customer
+    profile = await createOrUpdateUserProfile(uid, {
+      phone: fullPhone,
+      name: name.trim() || fullPhone,
+    });
   }
 
-  // Create or fetch Firestore profile
-  const profile = await createOrUpdateUserProfile(user.uid, {
-    phone: user.phoneNumber,
-    name: name.trim() || user.displayName || user.phoneNumber,
-  });
-
+  saveCustomerSession(profile);
   return profile;
 };
 
@@ -118,33 +129,46 @@ export const signInWithEmail = async (email, password) => {
   return profile;
 };
 
-/** Sign out the current user. */
+/** Sign out. Clears localStorage session for customers; Firebase sign-out for admin. */
 export const signOutUser = async () => {
-  await signOut(auth);
+  clearCustomerSession();
+  try { await signOut(auth); } catch (_) {}
 };
 
 // ── Auth State Listener ───────────────────────────────────────────────────────
 
 /**
- * Subscribe to Firebase Auth state changes.
- * On each auth change, fetches the Firestore user profile.
- * Calls `callback({ uid, name, phone, role } | null)`.
- * Returns the unsubscribe function.
+ * Subscribe to auth state.
+ * - Customers: restore from localStorage immediately.
+ * - Admin: use Firebase onAuthStateChanged.
+ * Calls `callback(profile | null)`.
+ * Returns an unsubscribe function.
  */
 export const subscribeToAuthState = (callback) => {
-  return onAuthStateChanged(auth, async (firebaseUser) => {
+  // Restore customer session from localStorage first (instant, no network)
+  const customerSession = loadCustomerSession();
+  if (customerSession) {
+    // Defer slightly so Redux store is ready
+    setTimeout(() => callback(customerSession), 0);
+  }
+
+  // Also listen for Firebase admin sessions
+  const unsubFirebase = onAuthStateChanged(auth, async (firebaseUser) => {
     if (firebaseUser) {
+      // Firebase user = admin (customers don't use Firebase Auth)
       const profile = await getUserProfile(firebaseUser.uid);
-      callback(
-        profile || {
-          uid: firebaseUser.uid,
-          phone: firebaseUser.phoneNumber,
-          name: firebaseUser.displayName || firebaseUser.phoneNumber || 'Customer',
-          role: 'customer',
-        }
-      );
+      if (profile?.role === 'admin') {
+        callback(profile);
+      }
+      // If no Firestore profile found for Firebase user, ignore
+      // (customer localStorage session already handled above)
     } else {
-      callback(null);
+      // Firebase signed out — only signal logout if no customer session
+      if (!loadCustomerSession()) {
+        callback(null);
+      }
     }
   });
+
+  return unsubFirebase;
 };
