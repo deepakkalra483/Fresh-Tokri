@@ -86,7 +86,7 @@ function CustomerApp() {
 
   return (
     <Shell
-      header={activeTab === 'home' ? <StickyHeader onTabChange={setActiveTab} /> : null}
+      header={activeTab === 'home' ? <StickyHeader /> : null}
       bottomNav={<BottomNavbar activeTab={activeTab} onTabChange={setActiveTab} />}
     >
       {activeTab === 'home'       && <HomePage />}
