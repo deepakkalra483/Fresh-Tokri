@@ -8,7 +8,7 @@ import { Heart, Plus, Minus, ChevronLeft, ShoppingBag, Package } from 'lucide-re
 
 
 
-export default function CategoriesPage({ onBackToHome }) {
+export default function CategoriesPage() {
   const dispatch = useDispatch();
   const currentMode = useSelector(selectDeliveryMode);
   const cartItems = useSelector(selectCartItems);
@@ -35,16 +35,10 @@ export default function CategoriesPage({ onBackToHome }) {
   }, [allProducts, activeCategory]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 pb-28">
+    <div className="flex flex-col h-full bg-slate-50">
 
       {/* Header */}
       <div className="bg-white px-4 py-2.5 flex items-center justify-between border-b border-slate-100 sticky top-0 z-20">
-        <button
-          onClick={onBackToHome}
-          className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 hover:bg-slate-200"
-        >
-          <ChevronLeft size={18} />
-        </button>
         <h1 className="text-sm font-extrabold text-slate-900 tracking-tight">Shop by Category</h1>
         <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-[10px] font-bold text-emerald-700 border border-emerald-200">
           {currentProducts.length}

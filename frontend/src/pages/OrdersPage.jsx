@@ -1,206 +1,247 @@
-import React from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useState, useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { addToCart, openCheckout } from '../features/cart/cartSlice';
 import {
-  setTrackingOrder,
-  clearTrackingOrder,
-  selectAllOrders,
-  selectActiveOrder,
-  selectTrackingOrderId,
-  selectTrackingOrder,
-  selectOrderFetchStatus,
-} from '../features/orders/ordersSlice';
-import LiveOrderTracker from '../components/orders/LiveOrderTracker';
-import {
-  Package, Clock, CheckCircle2, Bike, ArrowLeft,
-  ChevronRight, Zap, Sun, ShoppingBag
+  ShoppingBag, Clock, Zap, Sun, MapPin, Navigation,
+  MessageCircle, ChevronDown, ChevronUp, RefreshCw, Trash2,
 } from 'lucide-react';
 
-// ─── Status helpers ──────────────────────────────────────────────────────────
-const STATUS_CONFIG = {
-  placed:    { label: 'Order Received',  color: 'text-blue-600',   bg: 'bg-blue-50 border-blue-200',   dot: 'bg-blue-500',   icon: Package },
-  packed:    { label: 'Being Packed',    color: 'text-amber-600',  bg: 'bg-amber-50 border-amber-200', dot: 'bg-amber-500',  icon: Package },
-  on_way:    { label: 'Out for Delivery',color: 'text-emerald-600',bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500 animate-pulse', icon: Bike },
-  delivered: { label: 'Delivered ✓',    color: 'text-slate-500',  bg: 'bg-slate-50 border-slate-200', dot: 'bg-slate-400',  icon: CheckCircle2 },
-};
+const ORDERS_KEY = 'ft_orders';
 
-const ACTIVE_STATUSES = ['placed', 'packed', 'on_way'];
-
-function isActive(status) {
-  return ACTIVE_STATUSES.includes(status);
+// ── helpers ──────────────────────────────────────────────────────────────────
+function loadOrders() {
+  try {
+    return JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
+  } catch {
+    return [];
+  }
 }
 
-// ─── Single Order Card ───────────────────────────────────────────────────────
-function OrderCard({ order, isActiveOrder, onTrack }) {
-  const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.placed;
-  const StatusIcon = cfg.icon;
+// ── Single Order Card ─────────────────────────────────────────────────────────
+function OrderCard({ order, onReorder }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const isInstant = order.mode === 'instant';
   const itemCount = order.items?.length || 0;
-  const firstItem = order.items?.[0]?.name || 'Items';
 
   return (
-    <div className={`bg-white rounded-2xl border shadow-2xs overflow-hidden transition-all ${isActiveOrder ? 'border-emerald-300 ring-1 ring-emerald-200' : 'border-slate-200'}`}>
-      
-      {/* Active badge */}
-      {isActiveOrder && (
-        <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-          <span className="text-[10px] font-extrabold text-white uppercase tracking-wide">Active Order</span>
-        </div>
-      )}
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+
+      {/* Top colour stripe by delivery mode */}
+      <div className={`h-1 w-full ${isInstant
+        ? 'bg-gradient-to-r from-rose-400 to-rose-500'
+        : 'bg-gradient-to-r from-emerald-400 to-emerald-500'}`}
+      />
 
       <div className="p-3 space-y-2.5">
-        {/* Order ID row */}
-        <div className="flex items-center justify-between">
+
+        {/* Row 1: Order ID + total */}
+        <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
-              <ShoppingBag size={13} className="text-emerald-600" />
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center flex-shrink-0">
+              <ShoppingBag size={14} className="text-emerald-600" />
             </div>
             <div>
-              <div className="text-[11px] font-extrabold text-slate-900">Order #{order.id || order.orderId}</div>
-              <div className="text-[9px] text-slate-400 flex items-center gap-1">
-                <Clock size={8} />
-                {order.placedAt || '—'}
-                {order.mode && (
+              <p className="text-[12px] font-extrabold text-slate-900 tracking-tight">
+                {order.id}
+              </p>
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
+                <Clock size={9} />
+                <span>{order.placedAt}</span>
+                <span>·</span>
+                {isInstant ? (
                   <>
-                    <span>•</span>
-                    {order.mode === 'instant'
-                      ? <><Zap size={8} className="text-rose-500" /> Instant</>
-                      : <><Sun size={8} className="text-amber-500" /> Morning</>}
+                    <Zap size={9} className="text-rose-500" />
+                    <span className="text-rose-600 font-bold">Instant</span>
+                  </>
+                ) : (
+                  <>
+                    <Sun size={9} className="text-amber-500" />
+                    <span className="text-amber-600 font-bold">Morning</span>
                   </>
                 )}
               </div>
             </div>
           </div>
-          {/* Amount */}
-          <div className="text-right">
-            <div className="text-xs font-extrabold text-slate-900">₹{order.totalPaid}</div>
-            <div className="text-[9px] text-slate-400">{itemCount} item{itemCount !== 1 ? 's' : ''}</div>
+
+          <div className="text-right flex-shrink-0">
+            <p className="text-sm font-extrabold text-slate-900">₹{order.totalPaid}</p>
+            <p className="text-[10px] text-slate-400">{itemCount} item{itemCount !== 1 ? 's' : ''}</p>
           </div>
         </div>
 
-        {/* Items preview */}
-        <div className="text-[10px] text-slate-500 bg-slate-50 rounded-lg px-2.5 py-1.5 truncate border border-slate-100">
-          {order.items?.slice(0, 2).map((it, i) => (
-            <span key={i}>{i > 0 ? ' · ' : ''}{it.qty}× {it.name}</span>
-          ))}
-          {(order.items?.length || 0) > 2 && <span className="font-bold text-slate-600"> +{order.items.length - 2} more</span>}
+        {/* Row 2: Status */}
+        <div className="flex items-center">
+          <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-[10px] font-bold px-2.5 py-1 rounded-full">
+            <MessageCircle size={10} />
+            Sent via WhatsApp
+          </div>
         </div>
 
-        {/* Status + CTA row */}
-        <div className="flex items-center justify-between">
-          {/* Status pill */}
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold ${cfg.bg} ${cfg.color}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-            {cfg.label}
-          </div>
+        {/* Row 3: Items — collapsible */}
+        <div className="bg-slate-50 border border-slate-100 rounded-xl overflow-hidden">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold text-slate-700"
+          >
+            <span className="truncate pr-2">
+              {order.items?.slice(0, 2).map((it, i) => (
+                <span key={i}>{i > 0 ? ' · ' : ''}{it.qty}× {it.name}</span>
+              ))}
+              {itemCount > 2 && (
+                <span className="text-slate-400"> +{itemCount - 2} more</span>
+              )}
+            </span>
+            {expanded
+              ? <ChevronUp size={13} className="text-slate-400 flex-shrink-0" />
+              : <ChevronDown size={13} className="text-slate-400 flex-shrink-0" />}
+          </button>
 
-          {/* Track button only for active orders */}
-          {isActive(order.status) && (
-            <button
-              onClick={() => onTrack(order.id || order.orderId)}
-              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[10px] font-extrabold px-2.5 py-1.5 rounded-xl transition-all shadow-sm"
-            >
-              <Bike size={11} />
-              <span>Track Order</span>
-              <ChevronRight size={10} />
-            </button>
+          {expanded && (
+            <div className="border-t border-slate-100 px-3 py-2 space-y-1">
+              {order.items?.map((item, i) => (
+                <div key={i} className="flex justify-between text-[11px] text-slate-600">
+                  <span className="font-medium">
+                    {item.name}{' '}
+                    <span className="text-slate-400">×{item.qty}</span>
+                  </span>
+                  <span className="font-bold">₹{item.price * item.qty}</span>
+                </div>
+              ))}
+              <div className="flex justify-between text-xs font-extrabold text-slate-900 pt-1.5 border-t border-slate-100 mt-1">
+                <span>Total Paid</span>
+                <span className="text-emerald-700">₹{order.totalPaid}</span>
+              </div>
+            </div>
           )}
         </div>
+
+        {/* Row 4: Address */}
+        {order.address && (
+          <div className="flex items-start gap-2 text-[10px] text-slate-500">
+            {order.mapsLink
+              ? <Navigation size={11} className="text-blue-500 mt-0.5 flex-shrink-0" />
+              : <MapPin size={11} className="text-slate-400 mt-0.5 flex-shrink-0" />
+            }
+            <span className="leading-relaxed">
+              {order.address}
+              {order.mapsLink && (
+                <a
+                  href={order.mapsLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-1 text-blue-500 font-bold underline"
+                >
+                  Map →
+                </a>
+              )}
+            </span>
+          </div>
+        )}
+
+        {/* Row 5: Reorder */}
+        <button
+          onClick={() => onReorder(order)}
+          className="w-full flex items-center justify-center gap-1.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-[11px] font-extrabold rounded-xl shadow-sm transition-all"
+        >
+          <RefreshCw size={12} />
+          Reorder Same Items
+        </button>
+
       </div>
     </div>
   );
 }
 
-// ─── Main Orders Page ────────────────────────────────────────────────────────
+// ── Main Orders Page ──────────────────────────────────────────────────────────
 export default function OrdersPage() {
   const dispatch = useDispatch();
-  const allOrders = useSelector(selectAllOrders);
-  const activeOrder = useSelector(selectActiveOrder);
-  const trackingOrderId = useSelector(selectTrackingOrderId);
-  const trackingOrder = useSelector(selectTrackingOrder);
-  const fetchStatus = useSelector(selectOrderFetchStatus);
+  const [orders, setOrders] = useState([]);
 
-  // Orders come in real-time from Firestore via App.jsx listener — no manual fetch needed
+  // Load on mount; refresh when window gains focus (user came back from WhatsApp)
+  useEffect(() => {
+    setOrders(loadOrders());
+    const onFocus = () => setOrders(loadOrders());
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
-  // ─── Tracking View ──────────────────────────────────────────────────────────
-  if (trackingOrderId && trackingOrder) {
+  const handleReorder = (order) => {
+    // Re-add each item to Redux cart by product ID stored in the order
+    order.items.forEach((item) => {
+      const id = item.productId || item.id;
+      if (id) {
+        for (let i = 0; i < item.qty; i++) {
+          dispatch(addToCart(id));
+        }
+      }
+    });
+    dispatch(openCheckout());
+  };
+
+  const handleClearAll = () => {
+    if (window.confirm('Clear all order history from this device?')) {
+      localStorage.removeItem(ORDERS_KEY);
+      setOrders([]);
+    }
+  };
+
+  // ── Empty state ─────────────────────────────────────────────────────────────
+  if (orders.length === 0) {
     return (
-      <div className="space-y-3 pb-24 p-3">
-        {/* Back to orders list */}
-        <button
-          onClick={() => dispatch(clearTrackingOrder())}
-          className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-600 transition-colors active:scale-95"
-        >
-          <ArrowLeft size={15} />
-          Back to Orders
-        </button>
-        <LiveOrderTracker order={trackingOrder} />
+      <div className="flex flex-col items-center justify-center py-20 px-6 text-center space-y-4">
+        <div className="w-20 h-20 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+          <ShoppingBag size={32} className="text-emerald-400" />
+        </div>
+        <div>
+          <p className="text-base font-extrabold text-slate-800">No orders yet</p>
+          <p className="text-[12px] text-slate-400 mt-1 leading-relaxed max-w-xs">
+            When you place an order via WhatsApp, it will appear here on this device.
+          </p>
+        </div>
       </div>
     );
   }
 
-  // ─── Orders List View ───────────────────────────────────────────────────────
+  // ── Orders list ─────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3 pb-24 p-3">
-      {/* Page header */}
+    <div className="p-3 pb-8 space-y-3">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">My Orders</h2>
-          <p className="text-[10px] text-slate-400 mt-0.5">{allOrders.length} order{allOrders.length !== 1 ? 's' : ''} · Live updates</p>
+          <h2 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+            My Orders
+          </h2>
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            {orders.length} order{orders.length !== 1 ? 's' : ''} on this device
+          </p>
         </div>
-        <div className="flex items-center gap-1 text-[9px] text-emerald-600 font-bold">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          Live
-        </div>
+        <button
+          onClick={handleClearAll}
+          className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-rose-500 font-bold transition-colors"
+        >
+          <Trash2 size={11} />
+          Clear All
+        </button>
       </div>
 
-      {/* Loading skeleton */}
-      {fetchStatus === 'loading' && allOrders.length === 0 && (
-        <div className="space-y-2">
-          {[1, 2].map(i => (
-            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-3 space-y-2 animate-pulse">
-              <div className="h-3 bg-slate-200 rounded w-1/3" />
-              <div className="h-3 bg-slate-100 rounded w-2/3" />
-              <div className="h-6 bg-slate-100 rounded-lg" />
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Cards — newest first */}
+      <div className="space-y-3">
+        {orders.map((order) => (
+          <OrderCard
+            key={order.id}
+            order={order}
+            onReorder={handleReorder}
+          />
+        ))}
+      </div>
 
-      {/* Active order first (highlighted) */}
-      {activeOrder && isActive(activeOrder.status) && (
-        <OrderCard
-          order={activeOrder}
-          isActiveOrder
-          onTrack={(id) => dispatch(setTrackingOrder(id))}
-        />
-      )}
+      <p className="text-center text-[10px] text-slate-300 pt-2 leading-relaxed">
+        Order history is stored on this device only.<br />
+        Clearing browser data will remove history.
+      </p>
 
-      {/* Full order history list */}
-      {allOrders.length > 0 ? (
-        <div className="space-y-2">
-          {allOrders
-            // Don't re-render the active order at top in the list
-            .filter(o => !activeOrder || (o.id || o.orderId) !== (activeOrder.id || activeOrder.orderId))
-            .map((order) => (
-              <OrderCard
-                key={order.id || order.orderId}
-                order={order}
-                isActiveOrder={false}
-                onTrack={(id) => dispatch(setTrackingOrder(id))}
-              />
-            ))}
-        </div>
-      ) : fetchStatus !== 'loading' ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
-          <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center border border-emerald-100">
-            <ShoppingBag size={28} className="text-emerald-400" />
-          </div>
-          <div>
-            <p className="text-sm font-extrabold text-slate-700">No orders yet</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Place your first fresh order above!</p>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

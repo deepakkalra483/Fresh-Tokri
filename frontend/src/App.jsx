@@ -1,16 +1,16 @@
 /**
  * App.jsx
  * Root component — manages:
- * 1. Firebase Auth state listener (onAuthStateChanged → setAuthUser)
- * 2. Inventory + Categories real-time listeners (always on — no auth required)
- * 3. Orders real-time listener — starts only after login
+ * 1. Firebase Auth state listener (→ setAuthUser for admin sessions)
+ * 2. Inventory + Categories real-time listeners (always on)
+ * 3. Orders listener for admin panel
  * 4. URL-based routing:
  *    - /admin-deepak  → Admin login screen → Admin shell
- *    - everything else → Customer shell (no auth gate — browse freely)
+ *    - everything else → Customer shell (browse freely, WhatsApp checkout)
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 
 // Auth
 import {
@@ -19,9 +19,6 @@ import {
   selectIsAdmin,
   selectAuthLoading,
   selectCurrentUser,
-  selectOTPModalOpen,
-  openOTPModal,
-  setUserAfterOTP,
 } from './features/auth/authSlice';
 import { subscribeToAuthState } from './firebase/authService';
 
@@ -33,23 +30,19 @@ import { subscribeToInventory, seedInventoryIfEmpty } from './firebase/inventory
 import { setCategoriesList } from './features/categories/categoriesSlice';
 import { subscribeToCategories, seedCategoriesIfEmpty } from './firebase/categoriesService';
 
-// Orders
-import { setOrders, clearOrders, submitOrder } from './features/orders/ordersSlice';
-import { clearCart, selectCartItems, closeCheckout } from './features/cart/cartSlice';
-import { selectDeliveryMode } from './features/deliveryMode/deliveryModeSlice';
-import { selectActiveAddress } from './features/address/addressSlice';
-import { subscribeToAllOrders, subscribeToUserOrders } from './firebase/orderService';
+// Orders (admin only)
+import { setOrders, clearOrders } from './features/orders/ordersSlice';
+import { subscribeToAllOrders } from './firebase/orderService';
 
 // Layout
 import StickyHeader from './components/layout/StickyHeader';
-import FloatingCartBar from './components/layout/FloatingCartBar';
 import BottomNavbar from './components/layout/BottomNavbar';
 
 // Modals
 import CheckoutDrawer from './components/checkout/CheckoutDrawer';
 import ProductDetailsModal from './components/home/ProductDetailsModal';
 import AddressModal from './components/address/AddressModal';
-import OTPModal from './components/auth/OTPModal';
+import OTPModal from './components/auth/OTPModal'; // kept for profile login
 
 // Auth Screens
 import AdminLoginScreen from './components/auth/AdminLoginScreen';
@@ -57,6 +50,7 @@ import AdminLoginScreen from './components/auth/AdminLoginScreen';
 // Customer Pages
 import HomePage from './pages/HomePage';
 import CategoriesPage from './pages/CategoriesPage';
+import CartPage from './pages/CartPage';
 import OrdersPage from './pages/OrdersPage';
 import CustomerProfile from './pages/customer/CustomerProfile';
 
@@ -73,19 +67,21 @@ import { Leaf, Loader2 } from 'lucide-react';
 function Shell({ header, children, bottomNav }) {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-0 md:p-4 font-sans antialiased select-none">
-      <div className="w-full max-w-md h-screen md:h-[850px] md:max-h-[900px] bg-slate-50 md:rounded-3xl shadow-xl relative overflow-hidden flex flex-col border-0 md:border border-slate-200">
-        {header}
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+      <div className="w-full max-w-md bg-slate-50 md:rounded-3xl shadow-xl flex flex-col border-0 md:border border-slate-200"
+           style={{ height: '100dvh', maxHeight: '900px' }}>
+        {header && <div className="flex-shrink-0">{header}</div>}
+        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
           {children}
         </div>
-        {bottomNav}
+        <div className="flex-shrink-0">{bottomNav}</div>
       </div>
     </div>
   );
 }
 
+
 // ── Customer App ───────────────────────────────────────────────────────────────
-function CustomerApp({ onOrderPlaced }) {
+function CustomerApp() {
   const [activeTab, setActiveTab] = useState('home');
 
   return (
@@ -94,12 +90,12 @@ function CustomerApp({ onOrderPlaced }) {
       bottomNav={<BottomNavbar activeTab={activeTab} onTabChange={setActiveTab} />}
     >
       {activeTab === 'home'       && <HomePage />}
-      {activeTab === 'categories' && <CategoriesPage onBackToHome={() => setActiveTab('home')} />}
+      {activeTab === 'categories' && <CategoriesPage />}
+      {activeTab === 'cart'       && <CartPage onTabChange={setActiveTab} />}
       {activeTab === 'orders'     && <OrdersPage />}
       {activeTab === 'profile'    && <CustomerProfile />}
 
-      <FloatingCartBar />
-      <CheckoutDrawer onOrderPlaced={() => { onOrderPlaced?.(); setActiveTab('orders'); }} />
+      <CheckoutDrawer />
       <ProductDetailsModal />
       <AddressModal />
     </Shell>
@@ -143,13 +139,6 @@ export default function App() {
   const isAdmin     = useSelector(selectIsAdmin);
   const authLoading = useSelector(selectAuthLoading);
   const currentUser = useSelector(selectCurrentUser);
-  const otpOpen     = useSelector(selectOTPModalOpen);
-
-  // For post-OTP order submission
-  const cartItems   = useSelector(selectCartItems);
-  const mode        = useSelector(selectDeliveryMode);
-  const address     = useSelector(selectActiveAddress);
-  const products    = useSelector((state) => state.products.productsList);
 
   const unsubInventory  = useRef(null);
   const unsubOrders     = useRef(null);
@@ -184,26 +173,21 @@ export default function App() {
     };
   }, [dispatch]);
 
-  // ── 3. Orders listener (only when logged in) ───────────────────────────────
+  // ── 3. Orders listener (admin only — customers order via WhatsApp) ──────────
   useEffect(() => {
     if (unsubOrders.current) {
       unsubOrders.current();
       unsubOrders.current = null;
     }
 
-    if (!isLoggedIn || !currentUser) {
+    if (!isAdmin || !currentUser) {
       dispatch(clearOrders());
       return;
     }
 
-    if (isAdmin) {
-      unsubOrders.current = subscribeToAllOrders((orders) => dispatch(setOrders(orders)));
-    } else {
-      unsubOrders.current = subscribeToUserOrders(currentUser.uid, (orders) => dispatch(setOrders(orders)));
-    }
-
+    unsubOrders.current = subscribeToAllOrders((orders) => dispatch(setOrders(orders)));
     return () => { if (unsubOrders.current) unsubOrders.current(); };
-  }, [isLoggedIn, isAdmin, currentUser?.uid, dispatch]);
+  }, [isAdmin, currentUser?.uid, dispatch]);
 
   // ── Loading splash ─────────────────────────────────────────────────────────
   if (authLoading) {
@@ -218,38 +202,6 @@ export default function App() {
     );
   }
 
-  /**
-   * Called by OTPModal after successful phone verification.
-   * If there was a pending 'checkout' action, we immediately submit the order.
-   */
-  const handleOTPSuccess = (profile, pendingAction) => {
-    if (pendingAction === 'checkout' && address) {
-      const formattedItems = Object.entries(cartItems).map(([id, qty]) => {
-        const p = products.find((x) => x.id === id);
-        if (!p) return null;
-        const price = mode === 'instant' ? p.priceInstant : p.priceMorning;
-        return { id: p.id, name: `${p.name} (${p.weight})`, price, qty };
-      }).filter(Boolean);
-
-      const totals = formattedItems.reduce(
-        (acc, item) => ({ ...acc, finalTotal: acc.finalTotal + item.price * item.qty }),
-        { finalTotal: 0 }
-      );
-
-      dispatch(submitOrder({
-        userId:          profile.uid,
-        customerName:    profile.name || profile.phone || 'Customer',
-        items:           formattedItems,
-        mode,
-        total:           totals.finalTotal,
-        paymentMethod:   'COD',
-        deliveryAddress: `${address.label} (${address.tag}) • ${address.flat}, ${address.area}`,
-      }));
-      dispatch(clearCart());
-      dispatch(closeCheckout());
-    }
-  };
-
   return (
     <>
       <Routes>
@@ -263,15 +215,15 @@ export default function App() {
           }
         />
 
-        {/* ── All other routes → Customer shell (no auth gate) ── */}
+        {/* ── All other routes → Customer shell ── */}
         <Route
           path="*"
-          element={<CustomerApp onOrderPlaced={null} />}
+          element={<CustomerApp />}
         />
       </Routes>
 
-      {/* OTP Modal — rendered at root level so it floats above everything */}
-      <OTPModal onLoginSuccess={handleOTPSuccess} />
+      {/* OTP Modal — used for profile/account login if needed */}
+      <OTPModal />
     </>
   );
 }

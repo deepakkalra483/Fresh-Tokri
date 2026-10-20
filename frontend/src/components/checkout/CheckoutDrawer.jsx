@@ -1,293 +1,384 @@
-import React, { useState } from 'react';
+/**
+ * CheckoutDrawer.jsx
+ * WhatsApp-first checkout — no login, no Firestore order.
+ *
+ * Flow:
+ *   1. Show cart summary + delivery mode
+ *   2. Collect phone (10-digit, saved to localStorage for next time)
+ *   3. Collect address — GPS (Google Maps link) or typed text
+ *   4. Build pre-filled WhatsApp message → open wa.me link
+ *
+ * WhatsApp business number: +91 8901058909
+ */
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { selectIsCheckoutOpen, closeCheckout, selectCartTotals, selectCartItems, clearCart } from '../../features/cart/cartSlice';
+import {
+  selectIsCheckoutOpen, closeCheckout,
+  selectCartTotals, selectCartItems, clearCart,
+} from '../../features/cart/cartSlice';
 import { selectDeliveryMode } from '../../features/deliveryMode/deliveryModeSlice';
-import { selectActiveAddress, setActiveAddress, openAddressModal } from '../../features/address/addressSlice';
-import { submitOrder } from '../../features/orders/ordersSlice';
-import { selectCurrentUser, selectIsLoggedIn, openOTPModal } from '../../features/auth/authSlice';
+import { selectActiveAddress, setActiveAddress } from '../../features/address/addressSlice';
 import { useGeoLocation } from '../../hooks/useGeoLocation';
-import { X, ShoppingBasket, Home, Briefcase, Heart, Navigation as NavIcon, CheckCircle2, ArrowRight, Zap, Sun, CreditCard, Banknote, Navigation, Loader2, AlertCircle, MapPin, LogIn } from 'lucide-react';
+import {
+  X, ShoppingBasket, Zap, Sun, Navigation, Loader2,
+  AlertCircle, MapPin, MessageCircle,
+  ChevronDown, ChevronUp, Edit2,
+} from 'lucide-react';
 
-const tagIcon = (tag) => {
-  if (tag === 'WORK')  return <Briefcase size={16} />;
-  if (tag === 'OTHER') return <Heart size={16} />;
-  if (tag === 'GPS')   return <NavIcon size={16} />;
-  return <Home size={16} />;
-};
+const WA_NUMBER = '918901058909'; // +91 8901058909
+const ADDR_KEY  = 'ft_customer_address';
 
-export default function CheckoutDrawer({ onOrderPlaced }) {
-  const dispatch      = useDispatch();
-  const isOpen        = useSelector(selectIsCheckoutOpen);
-  const totals        = useSelector(selectCartTotals);
-  const cartItems     = useSelector(selectCartItems);
-  const mode          = useSelector(selectDeliveryMode);
-  const address       = useSelector(selectActiveAddress);
-  const products      = useSelector((state) => state.products.productsList);
-  const currentUser   = useSelector(selectCurrentUser);
-  const isLoggedIn    = useSelector(selectIsLoggedIn);
+// ── helpers ──────────────────────────────────────────────────────────────────
+function buildWhatsAppMessage({ items, total, mode, address, mapsLink }) {
+  const modeLabel = mode === 'instant'
+    ? '⚡ Instant Delivery (15–20 mins)'
+    : '🌅 Next Morning (6–9 AM, 20% off)';
 
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
-  const { status: gpsStatus, errorMsg: gpsError, requestLocation, reset: resetGps } = useGeoLocation();
+  const itemLines = items
+    .map((i) => `  • ${i.name} × ${i.qty}  —  ₹${(i.price * i.qty)}`)
+    .join('\n');
+
+  const locationLine = mapsLink
+    ? `📍 Location: ${mapsLink}\n   ${address}`
+    : `📍 Address: ${address}`;
+
+  return (
+    `🛒 *New Order — Fresh Tokri*\n\n` +
+    `📦 *Items:*\n${itemLines}\n\n` +
+    `💰 *Total: ₹${total}*\n` +
+    `🚚 ${modeLabel}\n\n` +
+    `${locationLine}`
+  );
+}
+
+// ── component ─────────────────────────────────────────────────────────────────
+export default function CheckoutDrawer() {
+  const dispatch  = useDispatch();
+  const isOpen    = useSelector(selectIsCheckoutOpen);
+  const totals    = useSelector(selectCartTotals);
+  const cartItems = useSelector(selectCartItems);
+  const mode      = useSelector(selectDeliveryMode);
+  const products  = useSelector((s) => s.products.productsList);
+  const savedAddr = useSelector(selectActiveAddress);
+
+  // Address
+  const [addrMode, setAddrMode]   = useState('gps'); // 'gps' | 'type'
+  const [typedAddr, setTypedAddr] = useState('');
+  const [addrErr, setAddrErr]     = useState('');
+  const [gpsCoords, setGpsCoords] = useState(null); // { lat, lng, label }
+
+  // UI
+  const [showItems, setShowItems] = useState(false);
+  const [sending,   setSending]   = useState(false);
+
+  const { status: gpsStatus, geoAddress, errorMsg: gpsError, requestLocation, reset: resetGps } = useGeoLocation();
+
+  // Restore saved address from localStorage on open
+  useEffect(() => {
+    if (isOpen) {
+      const savedAddress = localStorage.getItem(ADDR_KEY);
+      if (savedAddress) {
+        try {
+          const parsed = JSON.parse(savedAddress);
+          setTypedAddr(parsed.text || '');
+          if (parsed.coords) setGpsCoords(parsed.coords);
+        } catch (_) {}
+      }
+    }
+  }, [isOpen]);
+
+  // When GPS resolves, store coords
+  useEffect(() => {
+    if (geoAddress) {
+      setGpsCoords({ lat: geoAddress.lat, lng: geoAddress.lng, label: `${geoAddress.flat}, ${geoAddress.area}` });
+      dispatch(setActiveAddress(geoAddress));
+    }
+  }, [geoAddress, dispatch]);
 
   if (!isOpen) return null;
 
-  // Address is confirmed when user has actively selected/saved one
-  const isAddressConfirmed = !!address;
-  const needsLocationConfirm = !isAddressConfirmed;
+  // Build formatted cart items
+  const formattedItems = Object.entries(cartItems).map(([id, qty]) => {
+    const p = products.find((x) => x.id === id);
+    if (!p) return null;
+    const price = mode === 'instant' ? p.priceInstant : p.priceMorning;
+    return { id: p.id, name: `${p.name} (${p.weight})`, price, qty };
+  }).filter(Boolean);
 
-  const handleUseGPS = () => {
-    requestLocation((result) => {
-      dispatch(setActiveAddress(result));
-    });
+  const handleClose = () => {
+    dispatch(closeCheckout());
+    resetGps();
+    setSending(false);
   };
 
-  const handlePlaceOrder = () => {
-    if (!address) return; // guard: must have an address
-
-    // ── Not logged in → open OTP modal, order will be placed after login ──
-    if (!isLoggedIn) {
-      dispatch(closeCheckout());
-      dispatch(openOTPModal('checkout'));
+  const handleSendOnWhatsApp = () => {
+    // Validate address
+    const hasGPS    = addrMode === 'gps' && gpsCoords;
+    const hasTyped  = addrMode === 'type' && typedAddr.trim().length >= 5;
+    if (!hasGPS && !hasTyped) {
+      setAddrErr(
+        addrMode === 'gps'
+          ? 'Please detect your location first, or switch to type address.'
+          : 'Please enter your full address (at least 5 characters).'
+      );
       return;
     }
+    setAddrErr('');
 
-    // ── Already logged in → place order directly ──
-    const formattedItems = Object.entries(cartItems).map(([id, qty]) => {
-      const p = products.find((x) => x.id === id);
-      if (!p) return null;
-      const price = mode === 'instant' ? p.priceInstant : p.priceMorning;
-      return { id: p.id, name: `${p.name} (${p.weight})`, price, qty };
-    }).filter(Boolean);
+    // Save address for next time
+    const addrPayload = {
+      text: addrMode === 'type' ? typedAddr.trim() : (gpsCoords?.label || ''),
+      coords: hasGPS ? gpsCoords : null,
+    };
+    localStorage.setItem(ADDR_KEY, JSON.stringify(addrPayload));
 
-    dispatch(submitOrder({
-      userId:          currentUser?.uid,
-      customerName:    currentUser?.name || currentUser?.phone || 'Customer',
-      items:           formattedItems,
+    // Build message
+    const mapsLink = hasGPS
+      ? `https://maps.google.com/maps?q=${gpsCoords.lat},${gpsCoords.lng}`
+      : null;
+    const addrText = hasGPS
+      ? (gpsCoords.label || 'GPS Location')
+      : typedAddr.trim();
+
+    const message = buildWhatsAppMessage({
+      items:    formattedItems,
+      total:    totals.finalTotal,
       mode,
-      total:           totals.finalTotal,
-      paymentMethod,
-      deliveryAddress: `${address.label} (${address.tag}) • ${address.flat}, ${address.area}`,
-    }));
+      address:  addrText,
+      mapsLink,
+    });
 
+    const waUrl = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(message)}`;
+
+    // ── Save order to localStorage so Orders screen can display it ──────────
+    const newOrder = {
+      id: `FT-${Date.now()}`,
+      placedAt: new Date().toLocaleString('en-IN', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true,
+      }),
+      items: formattedItems.map((i) => ({
+        productId: i.id,      // ← product ID for Reorder
+        name:      i.name,
+        qty:       i.qty,
+        price:     i.price,
+      })),
+      totalPaid:   totals.finalTotal,
+      mode,
+      address:     addrText,
+      mapsLink:    mapsLink || null,
+      status:      'sent_whatsapp',
+    };
+
+    const existingOrders = JSON.parse(localStorage.getItem('ft_orders') || '[]');
+    localStorage.setItem('ft_orders', JSON.stringify([newOrder, ...existingOrders]));
+    // ────────────────────────────────────────────────────────────────────────
+
+    setSending(true);
     dispatch(clearCart());
     dispatch(closeCheckout());
     resetGps();
-    if (onOrderPlaced) onOrderPlaced();
+
+    // Open WhatsApp
+    window.open(waUrl, '_blank');
+    setSending(false);
   };
 
+  const canSend = formattedItems.length > 0;
+
   return (
-    <div className="fixed inset-0 bg-slate-900/60 z-50 flex flex-col justify-end transition-opacity">
-      <div className="bg-white rounded-t-3xl p-4 max-h-[88%] overflow-y-auto space-y-3 shadow-2xl max-w-[412px] mx-auto w-full">
-        
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+    <div className="fixed inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+      <div className="bg-white rounded-t-3xl max-h-[92%] overflow-y-auto shadow-2xl max-w-[412px] mx-auto w-full">
+
+        {/* ── Header ── */}
+        <div className="sticky top-0 bg-white rounded-t-3xl px-4 pt-4 pb-3 flex items-center justify-between border-b border-slate-100 z-10">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
-              <ShoppingBasket size={14} />
+            <div className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center">
+              <MessageCircle size={14} />
             </div>
-            <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Express Checkout</h3>
+            <h3 className="text-sm font-extrabold text-slate-900">Order via WhatsApp</h3>
           </div>
-          <button 
-            onClick={() => { dispatch(closeCheckout()); resetGps(); }}
-            className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs hover:bg-slate-200"
+          <button
+            onClick={handleClose}
+            className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200"
           >
             <X size={14} />
           </button>
         </div>
 
-        {/* Selected Mode Summary */}
-        <div className="bg-slate-50 p-2.5 rounded-xl text-xs border border-slate-200">
-          {mode === 'instant' ? (
-            <div>
-              <div className="flex items-center gap-1.5 font-extrabold text-rose-700 text-xs">
-                <Zap size={14} className="fill-rose-700" />
-                <span>Instant Express Delivery (15-20 Mins)</span>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Dispatched immediately from nearest local darkstore.</div>
-            </div>
-          ) : (
-            <div>
-              <div className="flex items-center gap-1.5 font-extrabold text-emerald-700 text-xs">
-                <Sun size={14} className="fill-emerald-700" />
-                <span>Tomorrow Morning Slot (6:00 AM - 9:00 AM)</span>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Farm harvested overnight. 20% Discount applied!</div>
-            </div>
-          )}
-        </div>
+        <div className="px-4 pb-6 space-y-4 pt-3">
 
-        {/* Delivery Address */}
-        <div>
-          <div className="text-[11px] font-extrabold text-slate-800 mb-1.5 flex justify-between items-center">
-            <span>📦 Delivering To</span>
-            <button
-              onClick={() => dispatch(openAddressModal())}
-              className="text-emerald-600 text-[10px] font-bold hover:underline"
-            >
-              Change Address
-            </button>
+          {/* ── Delivery Mode ── */}
+          <div className={`p-3 rounded-xl border text-xs ${
+            mode === 'instant'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}>
+            <div className="flex items-center gap-1.5 font-extrabold">
+              {mode === 'instant'
+                ? <><Zap size={13} className="fill-rose-600 text-rose-600" /> Instant Delivery — 15–20 mins</>
+                : <><Sun size={13} className="fill-emerald-600 text-emerald-600" /> Next Morning — 6–9 AM (20% off)</>
+              }
+            </div>
           </div>
 
-          {isAddressConfirmed ? (
-            /* Address confirmed — show full details clearly */
-            <div className="bg-emerald-50/70 border border-emerald-300 p-3 rounded-xl flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0">
-                {tagIcon(address.tag)}
+          {/* ── Cart Items (collapsible) ── */}
+          <div className="bg-slate-50 rounded-xl border border-slate-200">
+            <button
+              className="w-full flex items-center justify-between px-3 py-2.5 text-[11px] font-extrabold text-slate-800"
+              onClick={() => setShowItems((v) => !v)}
+            >
+              <div className="flex items-center gap-1.5">
+                <ShoppingBasket size={13} className="text-emerald-600" />
+                <span>{formattedItems.length} item{formattedItems.length !== 1 ? 's' : ''}</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-xs font-extrabold text-slate-900">{address.label}</span>
-                  <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase">
-                    {address.tag}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-700 font-semibold mt-0.5 truncate">{address.flat}</p>
-                <p className="text-[10px] text-slate-500 truncate">{address.area}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-700">₹{totals.finalTotal}</span>
+                {showItems ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </div>
-              <CheckCircle2 size={18} className="text-emerald-600 fill-emerald-100 flex-shrink-0 mt-0.5" />
-            </div>
-          ) : (
-            /* No address set yet */
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
-              <div className="flex items-start gap-2">
-                <MapPin size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[11px] text-amber-800 font-semibold leading-relaxed">
-                  No delivery address selected. Please set one to place your order.
-                </p>
-              </div>
+            </button>
 
+            {showItems && (
+              <div className="px-3 pb-3 space-y-1 border-t border-slate-200 pt-2">
+                {formattedItems.map((item) => (
+                  <div key={item.id} className="flex justify-between text-[11px] text-slate-700">
+                    <span className="font-medium">{item.name} <span className="text-slate-400">×{item.qty}</span></span>
+                    <span className="font-bold">₹{item.price * item.qty}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-xs font-extrabold text-slate-900 pt-1.5 border-t border-slate-200 mt-1.5">
+                  <span>Total</span>
+                  <span>₹{totals.finalTotal}</span>
+                </div>
+                {mode === 'morning' && totals.totalSavings > 0 && (
+                  <p className="text-[10px] text-emerald-700 font-bold text-right">
+                    You save ₹{totals.totalSavings} with morning delivery 🎉
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+
+
+          {/* ── Delivery Address ── */}
+          <div>
+            <div className="text-[11px] font-extrabold text-slate-800 mb-1.5 flex items-center gap-1">
+              <MapPin size={11} /> Delivery Address
+            </div>
+
+            {/* Toggle GPS / Type */}
+            <div className="flex rounded-xl overflow-hidden border border-slate-200 mb-2 text-[11px] font-bold">
               <button
-                onClick={handleUseGPS}
-                disabled={gpsStatus === 'loading'}
-                className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-[11px] font-bold transition-all active:scale-[0.98] ${
-                  gpsStatus === 'success'
-                    ? 'bg-emerald-600 text-white'
-                    : gpsStatus === 'denied' || gpsStatus === 'error'
-                    ? 'bg-red-100 text-red-700 border border-red-200'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                onClick={() => { setAddrMode('gps'); setAddrErr(''); }}
+                className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors ${
+                  addrMode === 'gps'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                {gpsStatus === 'loading' ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <Navigation size={13} />
-                )}
-                {gpsStatus === 'loading'
-                  ? 'Detecting your location...'
-                  : gpsStatus === 'success'
-                  ? '✓ Location Detected'
-                  : 'Use My Current Location'}
+                <Navigation size={12} /> Use GPS Location
               </button>
-
-              {(gpsStatus === 'denied' || gpsStatus === 'error') && (
-                <div className="flex items-start gap-1.5">
-                  <AlertCircle size={12} className="text-red-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[10px] text-red-600 leading-relaxed">{gpsError}</p>
-                    {gpsStatus === 'denied' && (
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        Allow from browser settings or{' '}
-                        <button
-                          onClick={() => dispatch(openAddressModal())}
-                          className="text-emerald-600 underline font-bold"
-                        >
-                          pick a saved address
-                        </button>.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
               <button
-                onClick={() => dispatch(openAddressModal())}
-                className="w-full text-[10px] text-slate-500 underline text-center"
+                onClick={() => { setAddrMode('type'); setAddrErr(''); }}
+                className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors ${
+                  addrMode === 'type'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
               >
-                Or choose from saved addresses
+                <Edit2 size={12} /> Type Address
               </button>
             </div>
-          )}
+
+            {/* GPS panel */}
+            {addrMode === 'gps' && (
+              <div className="space-y-2">
+                <button
+                  onClick={() => requestLocation()}
+                  disabled={gpsStatus === 'loading'}
+                  className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-[11px] font-bold transition-all active:scale-[0.98] ${
+                    gpsStatus === 'success'
+                      ? 'bg-emerald-600 text-white'
+                      : gpsStatus === 'denied' || gpsStatus === 'error'
+                      ? 'bg-red-100 text-red-700 border border-red-200'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {gpsStatus === 'loading'
+                    ? <Loader2 size={13} className="animate-spin" />
+                    : <Navigation size={13} />
+                  }
+                  {gpsStatus === 'loading' ? 'Detecting location...'
+                    : gpsStatus === 'success' ? '✓ Location Detected — tap to refresh'
+                    : 'Detect My Location'}
+                </button>
+
+                {gpsStatus === 'success' && gpsCoords && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 text-[10px] text-blue-800">
+                    <p className="font-bold mb-0.5">📍 {gpsCoords.label}</p>
+                    <p className="text-blue-600">
+                      A Google Maps link will be sent so we find you precisely.
+                    </p>
+                  </div>
+                )}
+
+                {(gpsStatus === 'denied' || gpsStatus === 'error') && (
+                  <div className="flex items-start gap-1.5 text-[10px] text-red-600">
+                    <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />
+                    <p>{gpsError} Switch to "Type Address" instead.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Type address panel */}
+            {addrMode === 'type' && (
+              <textarea
+                rows={3}
+                placeholder="e.g. House 12, Shivaji Nagar, Near Bus Stand, Bhiwani 127021"
+                value={typedAddr}
+                onChange={(e) => { setTypedAddr(e.target.value); setAddrErr(''); }}
+                className={`w-full rounded-xl px-3 py-2.5 text-sm text-slate-900 font-medium outline-none transition-all resize-none border ${
+                  addrErr
+                    ? 'bg-red-50 border-red-400'
+                    : 'bg-slate-100 border-transparent focus:border-emerald-500 focus:bg-white'
+                }`}
+              />
+            )}
+
+            {addrErr && <p className="text-[11px] text-red-600 mt-1 font-medium">{addrErr}</p>}
+          </div>
+
+          {/* ── WhatsApp CTA ── */}
+          <button
+            onClick={handleSendOnWhatsApp}
+            disabled={!canSend || sending}
+            className={`w-full font-extrabold py-3.5 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-sm active:scale-[0.99] ${
+              canSend
+                ? 'bg-[#25D366] hover:bg-[#1ebe5d] text-white'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            {sending ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              // WhatsApp icon SVG inline
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+            )}
+            {canSend
+              ? `Send Order on WhatsApp — ₹${totals.finalTotal}`
+              : 'Add items to place order'}
+          </button>
+
+          <p className="text-[10px] text-slate-400 text-center leading-relaxed">
+            Tapping the button opens WhatsApp with your order pre-filled.
+            Just press <strong>Send</strong> and we'll confirm within minutes.
+          </p>
+
         </div>
-
-        {/* Payment Methods */}
-        <div>
-          <div className="text-[11px] font-extrabold text-slate-800 mb-1">Select Payment Method</div>
-          <div className="grid grid-cols-2 gap-2">
-            <label 
-              onClick={() => setPaymentMethod('UPI')}
-              className={`p-2 rounded-xl flex items-center gap-2 cursor-pointer text-[11px] font-extrabold transition-colors ${
-                paymentMethod === 'UPI' 
-                  ? 'border-2 border-emerald-500 bg-emerald-50/40 text-slate-900' 
-                  : 'border border-slate-200 text-slate-600'
-              }`}
-            >
-              <CreditCard size={14} className="text-emerald-600" />
-              <span>UPI (Google Pay)</span>
-            </label>
-            <label 
-              onClick={() => setPaymentMethod('COD')}
-              className={`p-2 rounded-xl flex items-center gap-2 cursor-pointer text-[11px] font-extrabold transition-colors ${
-                paymentMethod === 'COD' 
-                  ? 'border-2 border-emerald-500 bg-emerald-50/40 text-slate-900' 
-                  : 'border border-slate-200 text-slate-600'
-              }`}
-            >
-              <Banknote size={14} className="text-slate-400" />
-              <span>Cash on Delivery</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Bill Breakdown */}
-        <div className="bg-slate-50 p-2.5 rounded-xl text-xs space-y-1 border border-slate-200/60">
-          <div className="flex justify-between text-slate-600 text-[11px]">
-            <span>Item Subtotal</span>
-            <span>₹{totals.subtotalInstant}</span>
-          </div>
-
-          {mode === 'morning' && totals.totalSavings > 0 && (
-            <div className="flex justify-between text-emerald-700 font-extrabold text-[11px]">
-              <span>Next Morning Farm Discount (20%)</span>
-              <span>-₹{totals.totalSavings}</span>
-            </div>
-          )}
-
-          <div className="flex justify-between text-slate-600 text-[11px]">
-            <span>Delivery Fee</span>
-            <span className="text-emerald-600 font-extrabold">FREE</span>
-          </div>
-
-          <div className="flex justify-between text-slate-900 font-extrabold text-xs pt-1.5 border-t border-slate-200">
-            <span>Total Payable Amount</span>
-            <span>₹{totals.finalTotal}</span>
-          </div>
-        </div>
-
-        {/* Place Order CTA Button */}
-        <button
-          onClick={handlePlaceOrder}
-          disabled={!isAddressConfirmed}
-          className={`w-full font-extrabold py-3 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider active:scale-[0.99] ${
-            isAddressConfirmed
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-          }`}
-        >
-          {!isAddressConfirmed ? (
-            <span>Set Delivery Address to Continue</span>
-          ) : !isLoggedIn ? (
-            <>
-              <LogIn size={14} />
-              <span>Login to Place Order (₹{totals.finalTotal})</span>
-            </>
-          ) : (
-            <>
-              <span>Place Order Now (₹{totals.finalTotal})</span>
-              <ArrowRight size={14} />
-            </>
-          )}
-        </button>
-
       </div>
     </div>
   );
