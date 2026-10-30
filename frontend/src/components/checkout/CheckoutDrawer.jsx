@@ -28,8 +28,11 @@ import {
 const WA_NUMBER = '918901058909'; // +91 8901058909
 const ADDR_KEY  = 'ft_customer_address';
 
+const FREE_DELIVERY_THRESHOLD = 179;
+const DELIVERY_FEE = 28;
+
 // ── helpers ──────────────────────────────────────────────────────────────────
-function buildWhatsAppMessage({ items, total, mode, address, mapsLink }) {
+function buildWhatsAppMessage({ items, itemsTotal, deliveryFee, total, mode, address, mapsLink }) {
   const modeLabel = mode === 'instant'
     ? '⚡ Instant Delivery (15–20 mins)'
     : '🌅 Next Morning (6–9 AM, 20% off)';
@@ -38,6 +41,10 @@ function buildWhatsAppMessage({ items, total, mode, address, mapsLink }) {
     .map((i) => `  • ${i.name} × ${i.qty}  —  ₹${(i.price * i.qty)}`)
     .join('\n');
 
+  const deliveryLine = deliveryFee > 0
+    ? `🚴 Delivery Fee: ₹${deliveryFee}`
+    : `🚴 Delivery Fee: FREE`;
+
   const locationLine = mapsLink
     ? `📍 Location: ${mapsLink}\n   ${address}`
     : `📍 Address: ${address}`;
@@ -45,7 +52,9 @@ function buildWhatsAppMessage({ items, total, mode, address, mapsLink }) {
   return (
     `🛒 *New Order — Fresh Tokri*\n\n` +
     `📦 *Items:*\n${itemLines}\n\n` +
-    `💰 *Total: ₹${total}*\n` +
+    `🧾 Items Total: ₹${itemsTotal}\n` +
+    `${deliveryLine}\n` +
+    `💰 *Grand Total: ₹${total}*\n` +
     `🚚 ${modeLabel}\n\n` +
     `${locationLine}`
   );
@@ -105,6 +114,11 @@ export default function CheckoutDrawer() {
     return { id: p.id, name: `${p.name} (${p.weight})`, price, qty };
   }).filter(Boolean);
 
+  // Delivery fee logic (same threshold as CartPage)
+  const itemsTotal   = totals.finalTotal;
+  const deliveryFee  = itemsTotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0;
+  const toPay        = itemsTotal + deliveryFee;
+
   const handleClose = () => {
     dispatch(closeCheckout());
     resetGps();
@@ -141,10 +155,12 @@ export default function CheckoutDrawer() {
       : typedAddr.trim();
 
     const message = buildWhatsAppMessage({
-      items:    formattedItems,
-      total:    totals.finalTotal,
+      items:       formattedItems,
+      itemsTotal,
+      deliveryFee,
+      total:       toPay,
       mode,
-      address:  addrText,
+      address:     addrText,
       mapsLink,
     });
 
@@ -163,7 +179,7 @@ export default function CheckoutDrawer() {
         qty:       i.qty,
         price:     i.price,
       })),
-      totalPaid:   totals.finalTotal,
+      totalPaid:   toPay,
       mode,
       address:     addrText,
       mapsLink:    mapsLink || null,
@@ -224,7 +240,7 @@ export default function CheckoutDrawer() {
                 <span>{formattedItems.length} item{formattedItems.length !== 1 ? 's' : ''}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-emerald-700">₹{totals.finalTotal}</span>
+                <span className="text-emerald-700">₹{toPay}</span>
                 {showItems ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </div>
             </button>
@@ -237,9 +253,17 @@ export default function CheckoutDrawer() {
                     <span className="font-bold">₹{item.price * item.qty}</span>
                   </div>
                 ))}
-                <div className="flex justify-between text-xs font-extrabold text-slate-900 pt-1.5 border-t border-slate-200 mt-1.5">
-                  <span>Total</span>
-                  <span>₹{totals.finalTotal}</span>
+                {/* Delivery fee row */}
+                <div className="flex justify-between text-[11px] text-slate-600 pt-1 border-t border-slate-100 mt-1">
+                  <span>Delivery Fee</span>
+                  {deliveryFee > 0
+                    ? <span className="font-bold text-slate-800">₹{deliveryFee}</span>
+                    : <span className="font-bold text-emerald-600">FREE</span>
+                  }
+                </div>
+                <div className="flex justify-between text-xs font-extrabold text-slate-900 pt-1.5 border-t border-slate-200 mt-1">
+                  <span>Grand Total</span>
+                  <span>₹{toPay}</span>
                 </div>
                 {mode === 'morning' && totals.totalSavings > 0 && (
                   <p className="text-[10px] text-emerald-700 font-bold text-right">
@@ -366,7 +390,7 @@ export default function CheckoutDrawer() {
               </svg>
             )}
             {canSend
-              ? `Place Order on WhatsApp — ₹${totals.finalTotal}`
+              ? `Place Order on WhatsApp — ₹${toPay}`
               : !hasValidAddress && formattedItems.length > 0
               ? 'Enter address to place order'
               : 'Add items to place order'}
