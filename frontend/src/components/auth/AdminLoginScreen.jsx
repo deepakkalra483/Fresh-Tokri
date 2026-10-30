@@ -14,11 +14,11 @@ import {
 import { Leaf, Eye, EyeOff, ShieldCheck, Loader2 } from 'lucide-react';
 
 export default function AdminLoginScreen() {
-  const dispatch    = useDispatch();
-  const loginError  = useSelector(selectLoginError);
+  const dispatch = useDispatch();
+  const loginError = useSelector(selectLoginError);
   const authLoading = useSelector(selectAuthLoading);
 
-  const [email,    setEmail]    = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
 
@@ -38,7 +38,7 @@ export default function AdminLoginScreen() {
             <ShieldCheck size={32} className="text-white" />
           </div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Admin Panel</h1>
-          <p className="text-slate-400 text-xs mt-1">Fresh Tokri · Restricted Access</p>
+          <p className="text-slate-400 text-xs mt-1">Dr. Bhindi · Restricted Access</p>
         </div>
 
         {/* Card */}
@@ -102,7 +102,7 @@ export default function AdminLoginScreen() {
         {/* Subtle branding */}
         <div className="flex items-center justify-center gap-2 mt-6 opacity-30">
           <Leaf size={12} className="text-emerald-400" />
-          <p className="text-[10px] text-white">Fresh Tokri · Admin Only</p>
+          <p className="text-[10px] text-white">Dr. Bhindi · Admin Only</p>
         </div>
       </div>
     </div>

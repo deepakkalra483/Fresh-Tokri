@@ -10,13 +10,13 @@ import {
 import { Leaf, Eye, EyeOff, ShieldCheck, UserRound, Loader2 } from 'lucide-react';
 
 export default function LoginScreen() {
-  const dispatch    = useDispatch();
-  const loginError  = useSelector(selectLoginError);
+  const dispatch = useDispatch();
+  const loginError = useSelector(selectLoginError);
   const authLoading = useSelector(selectAuthLoading);
 
-  const [email,    setEmail]    = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name,     setName]     = useState('');
+  const [name, setName] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [isSignup, setIsSignup] = useState(false);
 
@@ -51,7 +51,7 @@ export default function LoginScreen() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-2xl mb-3">
             <Leaf size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Fresh Tokri</h1>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">Dr. Bhindi</h1>
           <p className="text-emerald-300 text-xs mt-1">Farm-fresh veggies & fruits at your door</p>
         </div>
 
@@ -155,7 +155,7 @@ export default function LoginScreen() {
         </div>
 
         <p className="text-center text-[10px] text-white/25 mt-6">
-          Powered by Firebase · Fresh Tokri v1.0
+          Powered by Firebase · Dr. Bhindi v1.0
         </p>
       </div>
     </div>

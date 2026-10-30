@@ -6,10 +6,10 @@ import { Search, X, Zap, Sun } from 'lucide-react';
 import CategoryBar from '../home/CategoryBar';
 
 export default function StickyHeader() {
-  const dispatch     = useDispatch();
-  const currentMode  = useSelector(selectDeliveryMode);
-  const searchQuery  = useSelector(selectSearchQuery);
-  const inputRef     = useRef(null);
+  const dispatch = useDispatch();
+  const currentMode = useSelector(selectDeliveryMode);
+  const searchQuery = useSelector(selectSearchQuery);
+  const inputRef = useRef(null);
 
   return (
     <div className="flex-shrink-0 z-30 bg-white border-b border-slate-200/80 shadow-sm w-full">
@@ -19,11 +19,15 @@ export default function StickyHeader() {
 
         {/* Logo / Brand mark */}
         <div className="flex-shrink-0 flex items-center gap-1.5">
-          <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-sm">
-            <span className="text-[13px]">🥬</span>
+          <div className="w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center">
+            <img
+              src="/logo.jpg"
+              alt="Dr. Bhindi Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
           <span className="text-[13px] font-black text-slate-900 tracking-tight leading-none">
-            Fresh<span className="text-emerald-600">Tokri</span>
+            Dr.<span className="text-emerald-600">Bhindi</span>
           </span>
         </div>
 
@@ -58,11 +62,10 @@ export default function StickyHeader() {
 
           <button
             onClick={() => dispatch(setMode('instant'))}
-            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center ${
-              currentMode === 'instant'
-                ? 'bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center ${currentMode === 'instant'
+              ? 'bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             <div className="flex items-center gap-1.5">
               <Zap size={13} className={currentMode === 'instant' ? 'text-yellow-300 fill-yellow-300' : 'text-rose-500'} />
@@ -73,18 +76,16 @@ export default function StickyHeader() {
 
           <button
             onClick={() => dispatch(setMode('morning'))}
-            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center ${
-              currentMode === 'morning'
-                ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center justify-center ${currentMode === 'morning'
+              ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             <div className="flex items-center gap-1">
               <Sun size={13} className={currentMode === 'morning' ? 'text-amber-300 fill-amber-300' : 'text-amber-500'} />
               <span className="text-[11px]">Next Morning</span>
-              <span className={`font-extrabold text-[8px] px-1 py-0.5 rounded ${
-                currentMode === 'morning' ? 'bg-white text-emerald-800' : 'bg-emerald-600 text-white'
-              }`}>
+              <span className={`font-extrabold text-[8px] px-1 py-0.5 rounded ${currentMode === 'morning' ? 'bg-white text-emerald-800' : 'bg-emerald-600 text-white'
+                }`}>
                 SAVE 20%
               </span>
             </div>

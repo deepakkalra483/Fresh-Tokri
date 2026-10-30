@@ -99,11 +99,11 @@ function CustomerApp() {
       header={activeTab === 'home' ? <StickyHeader /> : null}
       bottomNav={<BottomNavbar activeTab={activeTab} onTabChange={setActiveTab} />}
     >
-      {activeTab === 'home'       && <HomePage />}
+      {activeTab === 'home' && <HomePage />}
       {activeTab === 'categories' && <CategoriesPage />}
-      {activeTab === 'cart'       && <CartPage onTabChange={setActiveTab} />}
-      {activeTab === 'orders'     && <OrdersPage />}
-      {activeTab === 'profile'    && <CustomerProfile />}
+      {activeTab === 'cart' && <CartPage onTabChange={setActiveTab} />}
+      {activeTab === 'orders' && <OrdersPage />}
+      {activeTab === 'profile' && <CustomerProfile />}
 
       <CheckoutDrawer />
       <ProductDetailsModal />
@@ -120,7 +120,7 @@ function AdminApp({ currentUser }) {
     <div className="flex-shrink-0 bg-gradient-to-r from-emerald-700 to-emerald-600 px-4 pt-safe pt-3 pb-3 flex items-center justify-between shadow-sm">
       <div>
         <span className="text-[9px] text-emerald-200 font-semibold uppercase tracking-widest">Admin Panel</span>
-        <h1 className="text-sm font-extrabold text-white leading-none">Fresh Tokri</h1>
+        <h1 className="text-sm font-extrabold text-white leading-none">Dr. Bhindi</h1>
       </div>
       <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center text-[11px] font-extrabold text-white">
         {currentUser?.name?.slice(0, 2).toUpperCase() || 'AD'}
@@ -133,25 +133,25 @@ function AdminApp({ currentUser }) {
       header={adminHeader}
       bottomNav={<BottomNavbar activeTab={activeTab} onTabChange={setActiveTab} />}
     >
-      {activeTab === 'admin-dashboard'  && <AdminDashboard />}
-      {activeTab === 'admin-menu'       && <AdminMenuPage />}
+      {activeTab === 'admin-dashboard' && <AdminDashboard />}
+      {activeTab === 'admin-menu' && <AdminMenuPage />}
       {activeTab === 'admin-categories' && <AdminCategoriesPage />}
-      {activeTab === 'admin-orders'     && <AdminOrdersPage />}
-      {activeTab === 'admin-delivery'   && <AdminDeliveryPage />}
+      {activeTab === 'admin-orders' && <AdminOrdersPage />}
+      {activeTab === 'admin-delivery' && <AdminDeliveryPage />}
     </Shell>
   );
 }
 
 // ── Root ───────────────────────────────────────────────────────────────────────
 export default function App() {
-  const dispatch    = useDispatch();
-  const isLoggedIn  = useSelector(selectIsLoggedIn);
-  const isAdmin     = useSelector(selectIsAdmin);
+  const dispatch = useDispatch();
+  const isLoggedIn = useSelector(selectIsLoggedIn);
+  const isAdmin = useSelector(selectIsAdmin);
   const authLoading = useSelector(selectAuthLoading);
   const currentUser = useSelector(selectCurrentUser);
 
-  const unsubInventory  = useRef(null);
-  const unsubOrders     = useRef(null);
+  const unsubInventory = useRef(null);
+  const unsubOrders = useRef(null);
   const unsubCategories = useRef(null);
 
   const location = useLocation();
@@ -178,7 +178,7 @@ export default function App() {
     });
 
     return () => {
-      if (unsubInventory.current)  unsubInventory.current();
+      if (unsubInventory.current) unsubInventory.current();
       if (unsubCategories.current) unsubCategories.current();
     };
   }, [dispatch]);
@@ -207,7 +207,7 @@ export default function App() {
           <Leaf size={32} className="text-white" />
         </div>
         <Loader2 size={24} className="text-emerald-400 animate-spin" />
-        <p className="text-emerald-300 text-xs">Loading Fresh Tokri...</p>
+        <p className="text-emerald-300 text-xs">Loading Dr. Bhindi...</p>
       </div>
     );
   }
