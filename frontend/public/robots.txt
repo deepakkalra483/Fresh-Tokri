@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://freshtokri.mrfryer.online/sitemap.xml
