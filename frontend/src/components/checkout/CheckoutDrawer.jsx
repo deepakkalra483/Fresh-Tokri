@@ -184,7 +184,10 @@ export default function CheckoutDrawer() {
     setSending(false);
   };
 
-  const canSend = formattedItems.length > 0;
+  const hasValidAddress =
+    (addrMode === 'gps' && gpsCoords) ||
+    (addrMode === 'type' && typedAddr.trim().length >= 5);
+  const canSend = formattedItems.length > 0 && hasValidAddress;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
@@ -208,19 +211,7 @@ export default function CheckoutDrawer() {
 
         <div className="px-4 pb-6 space-y-4 pt-3">
 
-          {/* ── Delivery Mode ── */}
-          <div className={`p-3 rounded-xl border text-xs ${
-            mode === 'instant'
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
-              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-          }`}>
-            <div className="flex items-center gap-1.5 font-extrabold">
-              {mode === 'instant'
-                ? <><Zap size={13} className="fill-rose-600 text-rose-600" /> Instant Delivery — 15–20 mins</>
-                : <><Sun size={13} className="fill-emerald-600 text-emerald-600" /> Next Morning — 6–9 AM (20% off)</>
-              }
-            </div>
-          </div>
+          {/* ── Delivery Mode — HIDDEN: only instant delivery active, next morning coming soon ── */}
 
           {/* ── Cart Items (collapsible) ── */}
           <div className="bg-slate-50 rounded-xl border border-slate-200">
@@ -351,6 +342,12 @@ export default function CheckoutDrawer() {
           </div>
 
           {/* ── WhatsApp CTA ── */}
+          {/* Address-not-set hint */}
+          {formattedItems.length > 0 && !hasValidAddress && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-center font-medium">
+              📍 Please detect or enter your delivery address to place the order.
+            </p>
+          )}
           <button
             onClick={handleSendOnWhatsApp}
             disabled={!canSend || sending}
@@ -369,7 +366,9 @@ export default function CheckoutDrawer() {
               </svg>
             )}
             {canSend
-              ? `Send Order on WhatsApp — ₹${totals.finalTotal}`
+              ? `Place Order on WhatsApp — ₹${totals.finalTotal}`
+              : !hasValidAddress && formattedItems.length > 0
+              ? 'Enter address to place order'
               : 'Add items to place order'}
           </button>
 

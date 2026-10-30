@@ -52,8 +52,8 @@ export default function StickyHeader() {
         </div>
       </div>
 
-      {/* ── Delivery Mode Switcher ── */}
-      <div className="px-3 pb-1.5">
+      {/* ── Delivery Mode Switcher ── HIDDEN: launch next morning delivery later */}
+      <div className="hidden px-3 pb-1.5">
         <div className="bg-slate-100 p-1 rounded-2xl flex relative border border-slate-200/80">
 
           <button

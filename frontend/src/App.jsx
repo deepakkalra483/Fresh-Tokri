@@ -66,13 +66,23 @@ import { Leaf, Loader2 } from 'lucide-react';
 // ── App shell wrapper ──────────────────────────────────────────────────────────
 function Shell({ header, children, bottomNav }) {
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-0 md:p-4 font-sans antialiased select-none">
-      <div className="w-full max-w-md bg-slate-50 md:rounded-3xl shadow-xl flex flex-col border-0 md:border border-slate-200"
-           style={{ height: '100dvh', maxHeight: '900px' }}>
+    <div
+      className="bg-slate-100 flex flex-col items-center justify-start p-0 md:p-4 font-sans antialiased select-none"
+      style={{ height: '100dvh', overflow: 'hidden' }}
+    >
+      <div
+        className="w-full max-w-md bg-slate-50 md:rounded-3xl shadow-xl flex flex-col border-0 md:border border-slate-200 overflow-hidden"
+        style={{ height: '100%', maxHeight: '900px' }}
+      >
+        {/* Fixed header — never scrolls */}
         {header && <div className="flex-shrink-0">{header}</div>}
-        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+
+        {/* Scrollable content area only */}
+        <div className="flex-1 overflow-y-auto overscroll-contain min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
           {children}
         </div>
+
+        {/* Fixed bottom nav — never scrolls */}
         <div className="flex-shrink-0">{bottomNav}</div>
       </div>
     </div>

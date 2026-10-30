@@ -42,24 +42,6 @@ export default function ProductCard({ product }) {
           {currentMode === 'morning' ? '20% OFF' : (product.discount || 'FRESH')}
         </div>
 
-        {/* Bottom-right: Cart qty overlay — shown when item is in cart */}
-        {qty > 0 && (
-          <div className="absolute bottom-1.5 right-1.5 flex items-center bg-emerald-600 text-white rounded-lg text-[10px] font-extrabold shadow-md border border-emerald-500/40">
-            <button
-              onClick={(e) => { e.stopPropagation(); dispatch(removeFromCart(product.id)); }}
-              className="px-1.5 py-1 hover:bg-emerald-700 rounded-l-lg active:scale-95 transition-all"
-            >
-              <Minus size={9} />
-            </button>
-            <span className="px-1 min-w-[18px] text-center tabular-nums">{qty}</span>
-            <button
-              onClick={(e) => { e.stopPropagation(); dispatch(addToCart(product.id)); }}
-              className="px-1.5 py-1 hover:bg-emerald-700 rounded-r-lg active:scale-95 transition-all"
-            >
-              <Plus size={9} />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ── Info + buy section ── */}

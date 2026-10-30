@@ -45,8 +45,21 @@ export default function ProductDetailsModal() {
             <Heart size={18} className={isFav ? 'fill-rose-500 text-rose-500' : ''} />
           </button>
 
-          <div className="text-7xl select-none py-2 my-2 animate-bounce-short">
-            {product.image}
+        {/* Hero Image */}
+          <div className="w-full h-44 rounded-2xl overflow-hidden bg-slate-100 relative mb-3">
+            <img
+              src={product.image}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            {/* Emoji fallback */}
+            <div className="hidden absolute inset-0 items-center justify-center text-7xl bg-emerald-50 select-none">
+              {product.emoji || '🥦'}
+            </div>
           </div>
 
           <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${

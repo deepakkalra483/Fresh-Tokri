@@ -152,40 +152,69 @@ export default function CartPage({ onTabChange }) {
       </button>
 
       {/* Bill Summary */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-3 space-y-2 shadow-xs">
-        <h4 className="text-xs font-bold text-slate-900">Bill Details</h4>
-        <div className="flex justify-between text-xs text-slate-600">
-          <span>Items Total</span>
-          <span className="font-semibold">₹{totals.finalTotal}</span>
-        </div>
-        <div className="flex justify-between text-xs text-slate-600">
-          <span>Delivery Partner Fee</span>
-          <span className="text-emerald-600 font-bold">FREE</span>
-        </div>
-        {mode === 'morning' && totals.totalSavings > 0 && (
-          <div className="flex justify-between text-xs text-emerald-700 font-medium bg-emerald-50/70 p-1.5 rounded-lg">
-            <span className="flex items-center gap-1">
-              <Sparkles size={12} /> Morning Savings
-            </span>
-            <span className="font-bold">-₹{totals.totalSavings}</span>
-          </div>
-        )}
-        <div className="border-t border-slate-100 pt-2 flex justify-between text-sm font-black text-slate-900">
-          <span>To Pay</span>
-          <span className="text-emerald-700">₹{totals.finalTotal}</span>
-        </div>
-      </div>
+      {(() => {
+        const FREE_DELIVERY_THRESHOLD = 179;
+        const DELIVERY_FEE = 28;
+        const itemsTotal = totals.finalTotal;
+        const hasDeliveryFee = itemsTotal < FREE_DELIVERY_THRESHOLD;
+        const deliveryFee = hasDeliveryFee ? DELIVERY_FEE : 0;
+        const toPay = itemsTotal + deliveryFee;
+        const amountNeeded = FREE_DELIVERY_THRESHOLD - itemsTotal;
 
-      {/* Checkout Button Trigger */}
-      <div className="pt-2">
-        <button
-          onClick={() => dispatch(openCheckout())}
-          className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
-        >
-          <span>Proceed to Checkout (₹{totals.finalTotal})</span>
-          <ArrowRight size={16} />
-        </button>
-      </div>
+        return (
+          <>
+            {/* Free delivery nudge */}
+            {hasDeliveryFee && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-800 flex items-center gap-2">
+                <span className="text-base">🚚</span>
+                <span>
+                  Add items worth <strong>₹{amountNeeded}</strong> more to get{' '}
+                  <strong>free delivery</strong>!
+                </span>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl border border-slate-200 p-3 space-y-2 shadow-xs">
+              <h4 className="text-xs font-bold text-slate-900">Bill Details</h4>
+              <div className="flex justify-between text-xs text-slate-600">
+                <span>Items Total</span>
+                <span className="font-semibold">₹{itemsTotal}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-600">
+                <span>Delivery Fee</span>
+                {hasDeliveryFee ? (
+                  <span className="font-bold text-slate-800">₹{DELIVERY_FEE}</span>
+                ) : (
+                  <span className="text-emerald-600 font-bold">FREE</span>
+                )}
+              </div>
+              {mode === 'morning' && totals.totalSavings > 0 && (
+                <div className="flex justify-between text-xs text-emerald-700 font-medium bg-emerald-50/70 p-1.5 rounded-lg">
+                  <span className="flex items-center gap-1">
+                    <Sparkles size={12} /> Morning Savings
+                  </span>
+                  <span className="font-bold">-₹{totals.totalSavings}</span>
+                </div>
+              )}
+              <div className="border-t border-slate-100 pt-2 flex justify-between text-sm font-black text-slate-900">
+                <span>To Pay</span>
+                <span className="text-emerald-700">₹{toPay}</span>
+              </div>
+            </div>
+
+            {/* Checkout Button Trigger */}
+            <div className="pt-2">
+              <button
+                onClick={() => dispatch(openCheckout())}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+              >
+                <span>Proceed to Checkout (₹{toPay})</span>
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
