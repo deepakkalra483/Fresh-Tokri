@@ -22,6 +22,13 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // Proxy for vegetablemarketprice.com API (avoids browser CORS block)
+      '/mandi-api': {
+        target: 'https://vegetablemarketprice.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/mandi-api/, ''),
+      },
     },
   },
 });

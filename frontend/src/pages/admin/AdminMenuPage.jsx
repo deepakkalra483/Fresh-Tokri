@@ -5,9 +5,10 @@ import {
   saveInventory,
 } from '../../features/products/productsSlice';
 import { selectCategories } from '../../features/categories/categoriesSlice';
+import { syncPricesFromMandi } from '../../firebase/priceSyncService';
 import {
-  Plus, Pencil, Trash2, Save, X, Package, Tag, Layers,
-  ToggleLeft, ToggleRight, ImageIcon, ChevronDown
+  Plus, Pencil, Trash2, Save, X, Package, Layers,
+  ToggleLeft, ToggleRight, RefreshCw, TrendingUp, CheckCircle2, AlertCircle
 } from 'lucide-react';
 
 // ── Defined OUTSIDE the component so it doesn't remount on every render ────────
@@ -47,6 +48,18 @@ export default function AdminMenuPage() {
   const [filterCat, setFilterCat]   = useState('all');
   const [confirmDelete, setConfirmDelete] = useState(null);
 
+  // ── Price Sync state ──────────────────────────────────────────────────────────
+  const [syncOpen,          setSyncOpen]          = useState(false);
+  const [instantMargin,     setInstantMargin]     = useState('');
+  const [morningMargin,     setMorningMargin]     = useState('');
+  const [syncing,           setSyncing]           = useState(false);
+  const [syncResult,        setSyncResult]        = useState(null); // null | { updated, skipped, errors }
+
+  // ── Share Price List state ────────────────────────────────────────────────────
+  const [shareOpen,         setShareOpen]         = useState(false);
+  const [shareCat,          setShareCat]          = useState('vegetables');
+  const [copied,            setCopied]            = useState(false);
+
   // ── helpers ──────────────────────────────────────────────────────────────────
   const openNew = () => {
     setForm({ ...EMPTY_FORM, id: `p${Date.now()}` });
@@ -84,6 +97,20 @@ export default function AdminMenuPage() {
   };
 
   const filtered = filterCat === 'all' ? products : products.filter(p => p.category === filterCat);
+
+  // ── Sync handler ──────────────────────────────────────────────────────────────
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const result = await syncPricesFromMandi(instantMargin, morningMargin);
+      setSyncResult({ success: true, ...result });
+    } catch (err) {
+      setSyncResult({ success: false, message: err.message });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
 
   return (
@@ -125,6 +152,117 @@ export default function AdminMenuPage() {
             </button>
           );
         })}
+      </div>
+
+      {/* ── 🔄 Daily Price Sync Panel ───────────────────────────────────────── */}
+      <div className="mx-3">
+        {/* Collapsed header — always visible */}
+        <button
+          onClick={() => { setSyncOpen(o => !o); setSyncResult(null); }}
+          className="w-full flex items-center justify-between bg-gradient-to-r from-blue-600 to-blue-500 text-white px-4 py-3 rounded-2xl shadow-sm active:scale-95 transition"
+        >
+          <div className="flex items-center gap-2">
+            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+            <span className="text-xs font-extrabold">Sync Today's Mandi Prices</span>
+          </div>
+          <span className="text-[10px] bg-white/20 rounded-full px-2 py-0.5 font-bold">
+            {syncOpen ? 'Close ▲' : 'Open ▼'}
+          </span>
+        </button>
+
+        {/* Expanded panel */}
+        {syncOpen && (
+          <div className="bg-white border border-blue-100 rounded-b-2xl shadow-sm px-4 pt-3 pb-4 space-y-3 -mt-1">
+
+            {/* Info note */}
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              Fetches today's retail prices from <span className="font-bold text-blue-600">Bhiwani Mandi</span> and updates all
+              vegetables that have a <code className="bg-slate-100 px-1 rounded">marketId</code>.
+              Add a margin % to increase price above retail. Leave blank for retail price only.
+            </p>
+
+            {/* Margin inputs */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wide mb-1 block">
+                  ⚡ Instant Margin %
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={instantMargin}
+                    onChange={e => setInstantMargin(e.target.value)}
+                    placeholder="0  (no markup)"
+                    className="w-full border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition pr-7"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">%</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wide mb-1 block">
+                  🌅 Morning Margin %
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={morningMargin}
+                    onChange={e => setMorningMargin(e.target.value)}
+                    placeholder="0  (no markup)"
+                    className="w-full border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition pr-7"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Price preview */}
+            <div className="bg-slate-50 rounded-xl px-3 py-2 text-[10px] text-slate-500 space-y-0.5">
+              <p className="font-bold text-slate-600 mb-1">📐 How prices will be calculated:</p>
+              <p>• <span className="font-semibold">Base</span> = API retail low (e.g. ₹50)</p>
+              <p>• <span className="font-semibold">Instant</span> = ₹50 + {instantMargin || 0}% = ₹{Math.round(50 + (50 * (parseFloat(instantMargin) || 0) / 100))}</p>
+              <p>• <span className="font-semibold">Morning</span> = ₹50 + {morningMargin || 0}% = ₹{Math.round(50 + (50 * (parseFloat(morningMargin) || 0) / 100))}</p>
+              <p>• <span className="font-semibold">Old Price</span> = API retail high (e.g. ₹59) — shown as crossed out</p>
+            </div>
+
+            {/* Result banner */}
+            {syncResult && (
+              <div className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-[10px] font-semibold ${
+                syncResult.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'
+              }`}>
+                {syncResult.success
+                  ? <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
+                  : <AlertCircle  size={14} className="flex-shrink-0 mt-0.5" />}
+                <div>
+                  {syncResult.success ? (
+                    <>
+                      <p>✅ <span className="font-extrabold">{syncResult.updated}</span> products updated</p>
+                      <p>⏭️ {syncResult.skipped} skipped (no marketId or not in API)</p>
+                      {syncResult.errors?.length > 0 && (
+                        <p className="text-rose-500 mt-1">⚠️ {syncResult.errors.length} warning(s): {syncResult.errors[0]}</p>
+                      )}
+                    </>
+                  ) : (
+                    <p>❌ Failed: {syncResult.message}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Sync button */}
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-extrabold text-xs py-3 rounded-xl transition active:scale-95"
+            >
+              <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing prices…' : '🔄 Sync Now'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Edit / Add Form ─────────────────────────────────────────────────── */}
