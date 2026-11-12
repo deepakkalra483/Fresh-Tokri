@@ -9,7 +9,7 @@ import { syncPricesFromMandi } from '../../firebase/priceSyncService';
 import {
   Plus, Pencil, Trash2, Save, X, Package, Layers,
   ToggleLeft, ToggleRight, RefreshCw, CheckCircle2, AlertCircle,
-  Share2, Copy, MessageCircle, ChevronDown,
+  Share2, Copy, MessageCircle, ChevronDown, CheckSquare, Square,
 } from 'lucide-react';
 
 // ── Defined OUTSIDE the component so it doesn't remount on every render ────────
@@ -60,6 +60,8 @@ export default function AdminMenuPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [shareCat, setShareCat] = useState('vegetables');
   const [copied, setCopied] = useState(false);
+  // Set of product IDs selected for WhatsApp broadcast
+  const [selectedShareIds, setSelectedShareIds] = useState(null);
 
   // ── helpers ──────────────────────────────────────────────────────────────────
   const openNew = () => {
@@ -100,35 +102,69 @@ export default function AdminMenuPage() {
   const filtered = filterCat === 'all' ? products : products.filter(p => p.category === filterCat);
 
   // ── Share Price List ──────────────────────────────────────────────────────────
+  // Returns currently available in-stock products in the selected category
+  const getCatInStockProducts = (categoryId) => {
+    return products
+      .filter(p => p.category === categoryId && p.inStock !== false)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  // Helper to check if an item is selected (defaults to true if selectedShareIds is null)
+  const isItemSelected = (id) => {
+    if (selectedShareIds === null) return true;
+    return selectedShareIds.has(id);
+  };
+
+  const toggleSelectItem = (id) => {
+    const inStock = getCatInStockProducts(shareCat);
+    const current = selectedShareIds !== null
+      ? new Set(selectedShareIds)
+      : new Set(inStock.map(p => p.id));
+
+    if (current.has(id)) {
+      current.delete(id);
+    } else {
+      current.add(id);
+    }
+    setSelectedShareIds(current);
+  };
+
+  const selectAllCategoryItems = () => {
+    const inStock = getCatInStockProducts(shareCat);
+    setSelectedShareIds(new Set(inStock.map(p => p.id)));
+  };
+
+  const deselectAllCategoryItems = () => {
+    setSelectedShareIds(new Set());
+  };
+
   const buildShareText = (categoryId) => {
     const today = new Date();
     const dateLabel = today.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
     const catInfo = CATEGORIES.find(c => c.id === categoryId);
-    const list = products
-      .filter(p => p.category === categoryId && p.inStock !== false)
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const allInStock = getCatInStockProducts(categoryId);
+    const list = allInStock.filter(p => isItemSelected(p.id));
 
     if (list.length === 0) return '';
 
     const header =
-      `🌿 *Fresh Tokri — Aaj ki Bhav List*\n` +
+      `*Fresh Tokri — Aaj ki Bhav List*\n` +
       `📅 ${dateLabel}\n` +
-      `${'━'.repeat(28)}\n\n` +
-      `${catInfo?.icon || '🛒'} *${(catInfo?.label || categoryId).toUpperCase()}*\n` +
-      `${'─'.repeat(28)}\n`;
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `*${(catInfo?.label || categoryId).toUpperCase()}*\n`;
 
+    // Clean single-line format without emojis, e.g. "Lady finger (Bhindi) - ₹30/250 gm"
     const rows = list.map(p => {
-      const name = p.name.padEnd(26, ' ');
-      const price = `₹${p.priceInstant}/${p.weight}`;
-      return `${p.emoji}  ${name}${price}`;
+      const cleanWeight = p.weight ? `/${p.weight}` : '';
+      return `${p.name} - ₹${p.priceInstant}${cleanWeight}`;
     }).join('\n');
 
     const footer =
-      `\n${'━'.repeat(28)}\n` +
-      `🛒 Order karo Dr. Bhindi par!\n` +
-      `📱 drbhindi.mrfryer.online\n` +
-      `\nHome delivery available_`;
+      `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `*Order karo Fresh Tokri par!*\n` +
+      `📱 freshtokri.in\n` +
+      `Same-day & morning delivery available`;
 
     return header + rows + footer;
   };
@@ -271,10 +307,10 @@ export default function AdminMenuPage() {
             {/* Price preview */}
             <div className="bg-slate-50 rounded-xl px-3 py-2 text-[10px] text-slate-500 space-y-0.5">
               <p className="font-bold text-slate-600 mb-1">📐 How prices will be calculated:</p>
-              <p>• <span className="font-semibold">Base</span> = API retail low (e.g. ₹50)</p>
-              <p>• <span className="font-semibold">Instant</span> = ₹50 + {instantMargin || 0}% = ₹{Math.round(50 + (50 * (parseFloat(instantMargin) || 0) / 100))}</p>
-              <p>• <span className="font-semibold">Morning</span> = ₹50 + {morningMargin || 0}% = ₹{Math.round(50 + (50 * (parseFloat(morningMargin) || 0) / 100))}</p>
-              <p>• <span className="font-semibold">Old Price</span> = API retail high (e.g. ₹59) — shown as crossed out</p>
+              <p>• <span className="font-semibold">Mandi API:</span> Uses <span className="font-bold text-slate-800">Maximum Retail Price</span> for 1 kg (e.g. if 23 - 29, takes ₹29/kg).</p>
+              <p>• <span className="font-semibold">Round Off (Up to 500g):</span> All items up to 500g (50g, 100g, 250g, 500g) are rounded UP to the next multiple of 10 (e.g. ₹7 → ₹10, ₹14 → ₹20, ₹24 → ₹30).</p>
+              <p>• <span className="font-semibold">Instant Price:</span> Converted base + {instantMargin || 0}% margin</p>
+              <p>• <span className="font-semibold">Morning Price:</span> Converted base + {morningMargin || 0}% margin</p>
             </div>
 
             {/* Result banner */}
@@ -344,7 +380,11 @@ export default function AdminMenuPage() {
                   return (
                     <button
                       key={c.id}
-                      onClick={() => { setShareCat(c.id); setCopied(false); }}
+                      onClick={() => {
+                        setShareCat(c.id);
+                        setCopied(false);
+                        setSelectedShareIds(null); // resets to select all for new category
+                      }}
                       className={`text-[10px] font-bold px-2.5 py-1.5 rounded-full border transition ${shareCat === c.id
                           ? 'bg-emerald-600 text-white border-emerald-600'
                           : 'bg-white text-slate-500 border-slate-200'
@@ -357,11 +397,65 @@ export default function AdminMenuPage() {
               </div>
             </div>
 
+            {/* Checklist of Items to Include/Exclude */}
+            <div className="border border-slate-200 rounded-xl p-2.5 bg-slate-50 space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                <span className="text-[10px] font-extrabold text-slate-700">
+                  Select Items to Broadcast ({getCatInStockProducts(shareCat).filter(p => isItemSelected(p.id)).length}/{getCatInStockProducts(shareCat).length})
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={selectAllCategoryItems}
+                    className="text-[9px] font-bold text-emerald-700 hover:underline"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    onClick={deselectAllCategoryItems}
+                    className="text-[9px] font-bold text-rose-600 hover:underline"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              {/* Items scroll list */}
+              <div className="max-h-44 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                {getCatInStockProducts(shareCat).map(p => {
+                  const checked = isItemSelected(p.id);
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => toggleSelectItem(p.id)}
+                      className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none border transition ${
+                        checked
+                          ? 'bg-emerald-50/80 border-emerald-200 text-slate-900 font-semibold'
+                          : 'bg-white border-slate-200 text-slate-400 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        {checked ? (
+                          <CheckSquare size={13} className="text-emerald-600 flex-shrink-0" />
+                        ) : (
+                          <Square size={13} className="text-slate-400 flex-shrink-0" />
+                        )}
+                        <span className="truncate text-[11px]">{p.name}</span>
+                      </div>
+                      <span className="text-[10px] font-bold ml-2 flex-shrink-0">
+                        ₹{p.priceInstant}{p.weight ? `/${p.weight}` : ''}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Preview box */}
-            <div className="bg-[#e9feee] rounded-xl p-3 border border-emerald-100">
-              <p className="text-[9px] text-slate-400 font-bold uppercase mb-1.5 tracking-wide">📋 Preview</p>
-              <pre className="text-[10px] text-slate-700 font-mono whitespace-pre-wrap leading-5 max-h-52 overflow-y-auto">
-                {buildShareText(shareCat) || 'No in-stock products in this category.'}
+            <div className="bg-[#f0fdf4] rounded-xl p-3 border border-emerald-200">
+              <p className="text-[9px] text-slate-400 font-bold uppercase mb-1.5 tracking-wide">📋 Preview (Clean Single-Line Format)</p>
+              <pre className="text-[11px] text-slate-800 font-sans whitespace-pre-wrap leading-5 max-h-48 overflow-y-auto font-medium">
+                {buildShareText(shareCat) || 'No items selected.'}
               </pre>
             </div>
 

@@ -4,15 +4,19 @@
  * and updates Firebase inventory prices for all products that have a `marketId`.
  *
  * Price logic:
- *   base price     = lower value of API retailprice range (e.g. "50 - 59" → 50)
- *   oldPrice       = higher value of API retailprice range (e.g. "50 - 59" → 59)
- *
- *   priceInstant   = base + (base × instantMargin / 100)  → rounded to nearest ₹1
- *   priceMorning   = base + (base × morningMargin / 100)  → rounded to nearest ₹1
- *
- *   If margin = 0, just use base directly.
- *
- * discount label   = auto-calculated from oldPrice vs priceInstant
+ *   1. Base rate per 1 kg = HIGHER (maximum) value of API retailprice range
+ *      (e.g. "23 - 29" -> 29 / kg)
+ *   2. Unit conversion:
+ *      Converted base = Math.round(Base rate * (Item weight in gm / 1000 gm))
+ *      - e.g. 29/kg for 250 gm -> Math.round(29 * 250 / 1000) = 7
+ *      - e.g. 29/kg for 500 gm -> Math.round(29 * 500 / 1000) = 15
+ *      - e.g. 29/kg for 1 kg   -> Math.round(29 * 1000 / 1000) = 29
+ *   3. Margins & Old Price:
+ *      priceInstant = Converted base + margin % (rounded)
+ *      priceMorning = Converted base + margin % (rounded)
+ *      oldPrice     = Calculated higher MRP (e.g. ~15-20% above instant or base)
+ *   4. Discount label:
+ *      Auto calculated percentage difference between oldPrice and priceInstant
  */
 
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -21,12 +25,10 @@ import { db } from './config';
 const INVENTORY_DOC = doc(db, 'inventory', 'menu');
 
 // ── API URL builder ───────────────────────────────────────────────────────────
-// In dev: uses Vite proxy (/mandi-api) → no CORS issues
-// In prod: uses allorigins.win as a free CORS proxy wrapper
 function buildApiUrl(date) {
   const directUrl = `https://vegetablemarketprice.com/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
   if (import.meta.env.DEV) {
-    // Vite dev server proxies /mandi-api → vegetablemarketprice.com
+    // Vite dev server proxies /mandi-api -> vegetablemarketprice.com
     return `/mandi-api/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
   }
   // Production: wrap with allorigins CORS proxy
@@ -42,20 +44,83 @@ function todayString() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// ── Parse "50 - 59" → { low: 50, high: 59 } ──────────────────────────────────
+// ── Parse "23 - 29" -> { low: 23, high: 29, max: 29 } ─────────────────────────
 function parseRetailRange(str) {
   if (!str) return null;
   const parts = String(str).split('-').map(s => parseInt(s.trim(), 10));
   if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-    return { low: parts[0], high: parts[1] };
+    return {
+      low: Math.min(parts[0], parts[1]),
+      high: Math.max(parts[0], parts[1]),
+      max: Math.max(parts[0], parts[1])
+    };
+  }
+  const single = parseInt(String(str).trim(), 10);
+  if (!isNaN(single)) {
+    return { low: single, high: single, max: single };
   }
   return null;
 }
 
+// ── Weight conversion ratio & gram detection ──────────────────────────────────
+/**
+ * Parses weights like "250 gm", "500g", "1 kg", "200 gm", "2 pcs" into:
+ * { ratio: multiplier of 1kg, grams: estimated total grams }
+ */
+function parseWeightInfo(weightStr) {
+  if (!weightStr) return { ratio: 1.0, grams: 1000 };
+  const s = String(weightStr).toLowerCase().trim();
+
+  // Kilograms: e.g. "1 kg", "2kg", "0.5 kg"
+  const kgMatch = s.match(/([\d.]+)\s*kg/);
+  if (kgMatch) {
+    const val = parseFloat(kgMatch[1]);
+    const numKg = !isNaN(val) && val > 0 ? val : 1.0;
+    return { ratio: numKg, grams: numKg * 1000 };
+  }
+
+  // Grams: e.g. "250 gm", "500g", "100 grams"
+  const gmMatch = s.match(/([\d.]+)\s*(gm|g|gram|grams)/);
+  if (gmMatch) {
+    const val = parseFloat(gmMatch[1]);
+    const g = !isNaN(val) && val > 0 ? val : 500;
+    return { ratio: g / 1000, grams: g };
+  }
+
+  // Count / Pcs: e.g. "2 pcs", "1 pc"
+  const pcMatch = s.match(/([\d.]+)\s*(pc|pcs|piece|pieces)/);
+  if (pcMatch) {
+    const val = parseFloat(pcMatch[1]);
+    const count = !isNaN(val) && val > 0 ? val : 1;
+    return { ratio: count * 0.25, grams: count * 250 };
+  }
+
+  if (s.includes('dozen')) {
+    return { ratio: 1.2, grams: 1200 };
+  }
+
+  return { ratio: 0.5, grams: 500 };
+}
+
+// ── Round up to next multiple of 10 ───────────────────────────────────────────
+// e.g. 7 -> 10, 10 -> 10, 16 -> 20, 21 -> 30
+function roundUpTo10(num) {
+  if (num <= 0) return 10;
+  return Math.ceil(num / 10) * 10;
+}
+
 // ── Add margin % and round ────────────────────────────────────────────────────
-function applyMargin(base, marginPct) {
+function applyMargin(base, marginPct, isUnderOrEqualTo500g = false) {
   const pct = parseFloat(marginPct) || 0;
-  return Math.round(base + (base * pct / 100));
+  const rawWithMargin = base + (base * pct / 100);
+
+  // If item is up to 500g (e.g. 50g, 100g, 200g, 250g, 500g), round UP to next multiple of 10
+  if (isUnderOrEqualTo500g) {
+    return roundUpTo10(rawWithMargin);
+  }
+
+  // Above 500g (e.g. 1 kg+): standard rounding to nearest Rs 1
+  return Math.max(1, Math.round(rawWithMargin));
 }
 
 // ── Auto discount label ───────────────────────────────────────────────────────
@@ -87,7 +152,6 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
     }
     apiData = json.data;
   } catch (err) {
-    // Give a clear, actionable error message
     if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
       throw new Error(
         'Could not reach Bhiwani Mandi API. ' +
@@ -97,7 +161,7 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
     throw new Error(`Mandi API error: ${err.message}`);
   }
 
-  // 2. Build a lookup map: marketId → { price, retailprice }
+  // 2. Build a lookup map: marketId -> { price, retailprice }
   const mandiMap = {};
   for (const item of apiData) {
     mandiMap[item.id] = item;
@@ -114,7 +178,7 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
     updatedMenu[category] = items.map(product => {
       if (!product.marketId) {
         result.skipped++;
-        return product; // no marketId → skip
+        return product; // no marketId -> skip
       }
 
       const apiItem = mandiMap[product.marketId];
@@ -131,11 +195,26 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
         return product;
       }
 
-      const basePrice    = range.low;
-      const oldPrice     = range.high;
-      const priceInstant = applyMargin(basePrice, instantMargin);
-      const priceMorning = applyMargin(basePrice, morningMargin);
-      const discount     = calcDiscount(priceInstant, oldPrice);
+      // Pick MAXIMUM retail price for 1 kg
+      const maxRetailPerKg = range.max;
+
+      // Convert proportionally to product's weight in DB
+      const weightInfo = parseWeightInfo(product.weight);
+      // Items up to 500 grams (50g, 100g, 200g, 250g, 500g, etc.)
+      const isUnderOrEqualTo500g = weightInfo.grams > 0 && weightInfo.grams <= 500;
+
+      // Raw converted price before margin
+      const convertedBasePrice = Math.max(1, maxRetailPerKg * weightInfo.ratio);
+
+      // Calculate instant & morning prices with user margins
+      // Items up to 500g are rounded UP to next multiple of 10 (e.g. 7->10, 14->20, 26->30)
+      const priceInstant = applyMargin(convertedBasePrice, instantMargin, isUnderOrEqualTo500g);
+      const priceMorning = applyMargin(convertedBasePrice, morningMargin, isUnderOrEqualTo500g);
+
+      // MRP / oldPrice: mark up over instant price (rounded nicely)
+      const rawOldPrice = isUnderOrEqualTo500g ? priceInstant + 10 : Math.max(priceInstant + 2, Math.round(priceInstant * 1.25));
+      const oldPrice = isUnderOrEqualTo500g ? roundUpTo10(rawOldPrice) : rawOldPrice;
+      const discount = calcDiscount(priceInstant, oldPrice);
 
       result.updated++;
       return {
