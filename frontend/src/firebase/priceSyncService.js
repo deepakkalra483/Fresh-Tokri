@@ -19,13 +19,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './config';
 
 const INVENTORY_DOC = doc(db, 'inventory', 'menu');
-// Use Vite proxy in dev (/mandi-api) to avoid CORS; direct URL in production
-const API_URL = (date) => {
-  const base = import.meta.env.DEV
-    ? '/mandi-api'                               // proxied by Vite → no CORS
-    : 'https://vegetablemarketprice.com';        // direct in production build
-  return `${base}/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
-};
+
+// ── API URL builder ───────────────────────────────────────────────────────────
+// In dev: uses Vite proxy (/mandi-api) → no CORS issues
+// In prod: uses allorigins.win as a free CORS proxy wrapper
+function buildApiUrl(date) {
+  const directUrl = `https://vegetablemarketprice.com/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
+  if (import.meta.env.DEV) {
+    // Vite dev server proxies /mandi-api → vegetablemarketprice.com
+    return `/mandi-api/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
+  }
+  // Production: wrap with allorigins CORS proxy
+  return `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
+}
 
 // ── Get today's date string in YYYY-MM-DD ─────────────────────────────────────
 function todayString() {
@@ -72,12 +78,23 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
   const dateStr = todayString();
   let apiData;
   try {
-    const res = await fetch(API_URL(dateStr));
-    if (!res.ok) throw new Error(`API returned ${res.status}`);
+    const url = buildApiUrl(dateStr);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Server replied with status ${res.status} ${res.statusText}`);
     const json = await res.json();
-    apiData = json.data; // array of { id, price, retailprice, ... }
+    if (!json?.data || !Array.isArray(json.data)) {
+      throw new Error('API response has no data array — format may have changed');
+    }
+    apiData = json.data;
   } catch (err) {
-    throw new Error(`Failed to fetch mandi prices: ${err.message}`);
+    // Give a clear, actionable error message
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      throw new Error(
+        'Could not reach Bhiwani Mandi API. ' +
+        'Make sure your dev server is running (npm run dev) and internet is connected.'
+      );
+    }
+    throw new Error(`Mandi API error: ${err.message}`);
   }
 
   // 2. Build a lookup map: marketId → { price, retailprice }

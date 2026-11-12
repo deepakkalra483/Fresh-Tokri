@@ -8,7 +8,8 @@ import { selectCategories } from '../../features/categories/categoriesSlice';
 import { syncPricesFromMandi } from '../../firebase/priceSyncService';
 import {
   Plus, Pencil, Trash2, Save, X, Package, Layers,
-  ToggleLeft, ToggleRight, RefreshCw, TrendingUp, CheckCircle2, AlertCircle
+  ToggleLeft, ToggleRight, RefreshCw, CheckCircle2, AlertCircle,
+  Share2, Copy, MessageCircle, ChevronDown,
 } from 'lucide-react';
 
 // ── Defined OUTSIDE the component so it doesn't remount on every render ────────
@@ -39,26 +40,26 @@ const EMPTY_FORM = {
 };
 
 export default function AdminMenuPage() {
-  const dispatch   = useDispatch();
-  const products   = useSelector(selectAllProducts);
+  const dispatch = useDispatch();
+  const products = useSelector(selectAllProducts);
   const CATEGORIES = useSelector(selectCategories);
 
-  const [editingId, setEditingId]   = useState(null); // null = no edit, 'new' = adding
-  const [form, setForm]             = useState(EMPTY_FORM);
-  const [filterCat, setFilterCat]   = useState('all');
+  const [editingId, setEditingId] = useState(null); // null = no edit, 'new' = adding
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [filterCat, setFilterCat] = useState('all');
   const [confirmDelete, setConfirmDelete] = useState(null);
 
   // ── Price Sync state ──────────────────────────────────────────────────────────
-  const [syncOpen,          setSyncOpen]          = useState(false);
-  const [instantMargin,     setInstantMargin]     = useState('');
-  const [morningMargin,     setMorningMargin]     = useState('');
-  const [syncing,           setSyncing]           = useState(false);
-  const [syncResult,        setSyncResult]        = useState(null); // null | { updated, skipped, errors }
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [instantMargin, setInstantMargin] = useState('');
+  const [morningMargin, setMorningMargin] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null); // null | { updated, skipped, errors }
 
   // ── Share Price List state ────────────────────────────────────────────────────
-  const [shareOpen,         setShareOpen]         = useState(false);
-  const [shareCat,          setShareCat]          = useState('vegetables');
-  const [copied,            setCopied]            = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareCat, setShareCat] = useState('vegetables');
+  const [copied, setCopied] = useState(false);
 
   // ── helpers ──────────────────────────────────────────────────────────────────
   const openNew = () => {
@@ -98,7 +99,55 @@ export default function AdminMenuPage() {
 
   const filtered = filterCat === 'all' ? products : products.filter(p => p.category === filterCat);
 
-  // ── Sync handler ──────────────────────────────────────────────────────────────
+  // ── Share Price List ──────────────────────────────────────────────────────────
+  const buildShareText = (categoryId) => {
+    const today = new Date();
+    const dateLabel = today.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const catInfo = CATEGORIES.find(c => c.id === categoryId);
+    const list = products
+      .filter(p => p.category === categoryId && p.inStock !== false)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (list.length === 0) return '';
+
+    const header =
+      `🌿 *Fresh Tokri — Aaj ki Bhav List*\n` +
+      `📅 ${dateLabel}\n` +
+      `${'━'.repeat(28)}\n\n` +
+      `${catInfo?.icon || '🛒'} *${(catInfo?.label || categoryId).toUpperCase()}*\n` +
+      `${'─'.repeat(28)}\n`;
+
+    const rows = list.map(p => {
+      const name = p.name.padEnd(26, ' ');
+      const price = `₹${p.priceInstant}/${p.weight}`;
+      return `${p.emoji}  ${name}${price}`;
+    }).join('\n');
+
+    const footer =
+      `\n${'━'.repeat(28)}\n` +
+      `🛒 Order karo Dr. Bhindi par!\n` +
+      `📱 drbhindi.mrfryer.online\n` +
+      `\nHome delivery available_`;
+
+    return header + rows + footer;
+  };
+
+  const handleCopy = (categoryId) => {
+    const text = buildShareText(categoryId);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  const handleWhatsApp = (categoryId) => {
+    const text = buildShareText(categoryId);
+    const encoded = encodeURIComponent(text);
+    window.open(`https://wa.me/?text=${encoded}`, '_blank');
+  };
+
+  // ── Sync handler ─────────────────────────────────────────────────────────────
   const handleSync = async () => {
     setSyncing(true);
     setSyncResult(null);
@@ -230,12 +279,11 @@ export default function AdminMenuPage() {
 
             {/* Result banner */}
             {syncResult && (
-              <div className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-[10px] font-semibold ${
-                syncResult.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'
-              }`}>
+              <div className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-[10px] font-semibold ${syncResult.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'
+                }`}>
                 {syncResult.success
                   ? <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
-                  : <AlertCircle  size={14} className="flex-shrink-0 mt-0.5" />}
+                  : <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />}
                 <div>
                   {syncResult.success ? (
                     <>
@@ -265,6 +313,89 @@ export default function AdminMenuPage() {
         )}
       </div>
 
+      {/* ── 📤 Share Price List Panel ────────────────────────────────────────── */}
+      <div className="mx-3">
+        {/* Toggle button */}
+        <button
+          onClick={() => { setShareOpen(o => !o); setCopied(false); }}
+          className="w-full flex items-center justify-between bg-gradient-to-r from-green-600 to-emerald-500 text-white px-4 py-3 rounded-2xl shadow-sm active:scale-95 transition"
+        >
+          <div className="flex items-center gap-2">
+            <Share2 size={14} />
+            <span className="text-xs font-extrabold">Share Price List on WhatsApp</span>
+          </div>
+          <span className="text-[10px] bg-white/20 rounded-full px-2 py-0.5 font-bold">
+            {shareOpen ? 'Close ▲' : 'Open ▼'}
+          </span>
+        </button>
+
+        {shareOpen && (
+          <div className="bg-white border border-emerald-100 rounded-b-2xl shadow-sm px-4 pt-3 pb-4 space-y-3 -mt-1">
+
+            {/* Category selector */}
+            <div>
+              <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wide mb-1.5 block">
+                Select Category to Share
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORIES.map(c => {
+                  const cnt = products.filter(p => p.category === c.id && p.inStock !== false).length;
+                  if (cnt === 0) return null;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => { setShareCat(c.id); setCopied(false); }}
+                      className={`text-[10px] font-bold px-2.5 py-1.5 rounded-full border transition ${shareCat === c.id
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-white text-slate-500 border-slate-200'
+                        }`}
+                    >
+                      {c.icon} {c.label} ({cnt})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Preview box */}
+            <div className="bg-[#e9feee] rounded-xl p-3 border border-emerald-100">
+              <p className="text-[9px] text-slate-400 font-bold uppercase mb-1.5 tracking-wide">📋 Preview</p>
+              <pre className="text-[10px] text-slate-700 font-mono whitespace-pre-wrap leading-5 max-h-52 overflow-y-auto">
+                {buildShareText(shareCat) || 'No in-stock products in this category.'}
+              </pre>
+            </div>
+
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Copy */}
+              <button
+                onClick={() => handleCopy(shareCat)}
+                className={`flex items-center justify-center gap-1.5 font-extrabold text-xs py-3 rounded-xl border transition active:scale-95 ${copied
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+                  }`}
+              >
+                <Copy size={13} />
+                {copied ? '✅ Copied!' : 'Copy Text'}
+              </button>
+
+              {/* WhatsApp */}
+              <button
+                onClick={() => handleWhatsApp(shareCat)}
+                className="flex items-center justify-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white font-extrabold text-xs py-3 rounded-xl transition active:scale-95 shadow-sm"
+              >
+                <MessageCircle size={13} />
+                Share on WhatsApp
+              </button>
+            </div>
+
+            <p className="text-[9px] text-slate-400 text-center">
+              Only <span className="font-bold">In Stock</span> items are included · Sorted A–Z
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* ── Edit / Add Form ─────────────────────────────────────────────────── */}
       {editingId && (
         <div className="mx-3 bg-white rounded-2xl border border-emerald-200 shadow-lg overflow-hidden">
@@ -278,62 +409,62 @@ export default function AdminMenuPage() {
           <div className="p-3 grid grid-cols-2 gap-2.5">
             <div className="col-span-2">
               <FormField label="Product Name *">
-                <input className={inp} value={form.name} onChange={e => setForm(f=>({...f, name: e.target.value}))} placeholder="e.g. Fresh Tomatoes" />
+                <input className={inp} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Fresh Tomatoes" />
               </FormField>
             </div>
 
             <FormField label="Weight / Unit">
-              <input className={inp} value={form.weight} onChange={e => setForm(f=>({...f, weight: e.target.value}))} placeholder="e.g. 500g" />
+              <input className={inp} value={form.weight} onChange={e => setForm(f => ({ ...f, weight: e.target.value }))} placeholder="e.g. 500g" />
             </FormField>
 
             <FormField label="Category">
-              <select className={inp} value={form.category} onChange={e => setForm(f=>({...f, category: e.target.value}))}>
+              <select className={inp} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
                 {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.label}</option>)}
               </select>
             </FormField>
 
             <FormField label="Instant Price (₹) *">
-              <input className={inp} type="number" value={form.priceInstant} onChange={e => setForm(f=>({...f, priceInstant: Number(e.target.value)}))} placeholder="55" />
+              <input className={inp} type="number" value={form.priceInstant} onChange={e => setForm(f => ({ ...f, priceInstant: Number(e.target.value) }))} placeholder="55" />
             </FormField>
 
             <FormField label="Morning Price (₹)">
-              <input className={inp} type="number" value={form.priceMorning} onChange={e => setForm(f=>({...f, priceMorning: Number(e.target.value)}))} placeholder="45" />
+              <input className={inp} type="number" value={form.priceMorning} onChange={e => setForm(f => ({ ...f, priceMorning: Number(e.target.value) }))} placeholder="45" />
             </FormField>
 
             <FormField label="Old/MRP Price (₹)">
-              <input className={inp} type="number" value={form.oldPrice} onChange={e => setForm(f=>({...f, oldPrice: Number(e.target.value)}))} placeholder="70" />
+              <input className={inp} type="number" value={form.oldPrice} onChange={e => setForm(f => ({ ...f, oldPrice: Number(e.target.value) }))} placeholder="70" />
             </FormField>
 
             <FormField label="Discount Label">
-              <input className={inp} value={form.discount} onChange={e => setForm(f=>({...f, discount: e.target.value}))} placeholder="20% OFF" />
+              <input className={inp} value={form.discount} onChange={e => setForm(f => ({ ...f, discount: e.target.value }))} placeholder="20% OFF" />
             </FormField>
 
             <FormField label="Emoji">
-              <input className={inp} value={form.emoji} onChange={e => setForm(f=>({...f, emoji: e.target.value}))} placeholder="🥬" />
+              <input className={inp} value={form.emoji} onChange={e => setForm(f => ({ ...f, emoji: e.target.value }))} placeholder="🥬" />
             </FormField>
 
             <FormField label="Tag">
-              <input className={inp} value={form.tag} onChange={e => setForm(f=>({...f, tag: e.target.value}))} placeholder="Farm Fresh" />
+              <input className={inp} value={form.tag} onChange={e => setForm(f => ({ ...f, tag: e.target.value }))} placeholder="Farm Fresh" />
             </FormField>
 
             <div className="col-span-2">
               <FormField label="Image URL">
-                <input className={inp} value={form.image} onChange={e => setForm(f=>({...f, image: e.target.value}))} placeholder="https://..." />
+                <input className={inp} value={form.image} onChange={e => setForm(f => ({ ...f, image: e.target.value }))} placeholder="https://..." />
               </FormField>
             </div>
 
             <div className="col-span-2">
               <FormField label="Description">
-                <textarea className={`${inp} resize-none`} rows={2} value={form.description} onChange={e => setForm(f=>({...f, description: e.target.value}))} placeholder="Short product description..." />
+                <textarea className={`${inp} resize-none`} rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Short product description..." />
               </FormField>
             </div>
 
             <div className="col-span-2 flex items-center gap-2">
               <span className="text-[10px] font-bold text-slate-500 uppercase">In Stock</span>
-              <button onClick={() => setForm(f=>({...f, inStock: !f.inStock}))} className="transition">
+              <button onClick={() => setForm(f => ({ ...f, inStock: !f.inStock }))} className="transition">
                 {form.inStock
                   ? <ToggleRight size={24} className="text-emerald-600" />
-                  : <ToggleLeft  size={24} className="text-slate-300" />}
+                  : <ToggleLeft size={24} className="text-slate-300" />}
               </button>
               <span className={`text-[10px] font-bold ${form.inStock ? 'text-emerald-600' : 'text-slate-400'}`}>
                 {form.inStock ? 'Available' : 'Out of Stock'}
@@ -374,7 +505,7 @@ export default function AdminMenuPage() {
               {/* Image / emoji */}
               <div className="w-14 h-14 rounded-xl bg-slate-100 flex-shrink-0 overflow-hidden flex items-center justify-center text-2xl border border-slate-100">
                 {p.image
-                  ? <img src={p.image} alt={p.name} className="w-full h-full object-cover" onError={e => { e.target.style.display='none'; }} />
+                  ? <img src={p.image} alt={p.name} className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none'; }} />
                   : p.emoji || '📦'}
               </div>
 
@@ -388,7 +519,7 @@ export default function AdminMenuPage() {
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                    {CATEGORIES.find(c=>c.id===p.category)?.icon} {p.category}
+                    {CATEGORIES.find(c => c.id === p.category)?.icon} {p.category}
                   </span>
                   <span className="text-[9px] text-slate-400">⚖️ {p.weight}</span>
                 </div>

@@ -28,6 +28,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/mandi-api/, ''),
+        headers: {
+          'Referer':    'https://vegetablemarketprice.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Origin':     'https://vegetablemarketprice.com',
+        },
       },
     },
   },
