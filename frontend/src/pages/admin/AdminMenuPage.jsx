@@ -261,9 +261,8 @@ export default function AdminMenuPage() {
 
             {/* Info note */}
             <p className="text-[10px] text-slate-500 leading-relaxed">
-              Fetches today's retail prices from <span className="font-bold text-blue-600">Bhiwani Mandi</span> and updates all
-              vegetables that have a <code className="bg-slate-100 px-1 rounded">marketId</code>.
-              Add a margin % to increase price above retail. Leave blank for retail price only.
+              Fetches today's retail prices from <span className="font-bold text-blue-600">Bhiwani Mandi (Vegetables)</span> and <span className="font-bold text-blue-600">Market Price API (Fruits)</span> for items with a <code className="bg-slate-100 px-1 rounded">marketId</code>.
+              Fruits automatically get <span className="font-bold text-slate-800">+₹10</span> added to max retail before unit & round-off calculations.
             </p>
 
             {/* Margin inputs */}
@@ -307,7 +306,7 @@ export default function AdminMenuPage() {
             {/* Price preview */}
             <div className="bg-slate-50 rounded-xl px-3 py-2 text-[10px] text-slate-500 space-y-0.5">
               <p className="font-bold text-slate-600 mb-1">📐 How prices will be calculated:</p>
-              <p>• <span className="font-semibold">Mandi API:</span> Uses <span className="font-bold text-slate-800">Maximum Retail Price</span> for 1 kg (e.g. if 23 - 29, takes ₹29/kg).</p>
+              <p>• <span className="font-semibold">Mandi API:</span> Uses <span className="font-bold text-slate-800">Maximum Retail Price</span> for 1 kg (e.g. if 23 - 29, takes ₹29/kg). For Fruits, adds +₹10 (e.g. 59 + 10 = ₹69/kg).</p>
               <p>• <span className="font-semibold">Round Off (Up to 500g):</span> All items up to 500g (50g, 100g, 250g, 500g) are rounded UP to the next multiple of 10 (e.g. ₹7 → ₹10, ₹14 → ₹20, ₹24 → ₹30).</p>
               <p>• <span className="font-semibold">Instant Price:</span> Converted base + {instantMargin || 0}% margin</p>
               <p>• <span className="font-semibold">Morning Price:</span> Converted base + {morningMargin || 0}% margin</p>

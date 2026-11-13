@@ -24,14 +24,20 @@ import { db } from './config';
 
 const INVENTORY_DOC = doc(db, 'inventory', 'menu');
 
-// ── API URL builder ───────────────────────────────────────────────────────────
-function buildApiUrl(date) {
+// ── API URL builders ──────────────────────────────────────────────────────────
+function buildVegetablesApiUrl(date) {
   const directUrl = `https://vegetablemarketprice.com/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
   if (import.meta.env.DEV) {
-    // Vite dev server proxies /mandi-api -> vegetablemarketprice.com
     return `/mandi-api/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
   }
-  // Production: wrap with allorigins CORS proxy
+  return `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
+}
+
+function buildFruitsApiUrl(date) {
+  const directUrl = `https://vegetablemarketprice.com/api/dataapi/fruits/westbengal/daywisedata?date=${date}`;
+  if (import.meta.env.DEV) {
+    return `/fruits-api/api/dataapi/fruits/westbengal/daywisedata?date=${date}`;
+  }
   return `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
 }
 
@@ -139,40 +145,54 @@ function calcDiscount(priceInstant, oldPrice) {
 export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) {
   const result = { updated: 0, skipped: 0, errors: [] };
 
-  // 1. Fetch today's API data
+  // 1. Fetch today's API data (Vegetables + Fruits)
   const dateStr = todayString();
-  let apiData;
-  try {
-    const url = buildApiUrl(dateStr);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Server replied with status ${res.status} ${res.statusText}`);
-    const json = await res.json();
-    if (!json?.data || !Array.isArray(json.data)) {
-      throw new Error('API response has no data array — format may have changed');
-    }
-    apiData = json.data;
-  } catch (err) {
-    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-      throw new Error(
-        'Could not reach Bhiwani Mandi API. ' +
-        'Make sure your dev server is running (npm run dev) and internet is connected.'
-      );
-    }
-    throw new Error(`Mandi API error: ${err.message}`);
-  }
-
-  // 2. Build a lookup map: marketId -> { price, retailprice }
   const mandiMap = {};
-  for (const item of apiData) {
-    mandiMap[item.id] = item;
+
+  // Fetch Vegetables (Bhiwani)
+  try {
+    const vegUrl = buildVegetablesApiUrl(dateStr);
+    const res = await fetch(vegUrl);
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json?.data)) {
+        for (const item of json.data) {
+          mandiMap[item.id] = { ...item, _type: 'vegetable' };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Vegetable API fetch error:', err);
+    result.errors.push('Could not fetch vegetables API: ' + err.message);
   }
 
-  // 3. Fetch current Firestore inventory
+  // Fetch Fruits (West Bengal / National rates)
+  try {
+    const fruitUrl = buildFruitsApiUrl(dateStr);
+    const res = await fetch(fruitUrl);
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json?.data)) {
+        for (const item of json.data) {
+          mandiMap[item.id] = { ...item, _type: 'fruit' };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Fruits API fetch error:', err);
+    result.errors.push('Could not fetch fruits API: ' + err.message);
+  }
+
+  if (Object.keys(mandiMap).length === 0) {
+    throw new Error('Could not reach Mandi APIs. Please check internet connection.');
+  }
+
+  // 2. Fetch current Firestore inventory
   const snap = await getDoc(INVENTORY_DOC);
   if (!snap.exists()) throw new Error('Inventory document not found in Firestore.');
   const menuObj = snap.data().menu;
 
-  // 4. Walk every product, update if it has a marketId that exists in API
+  // 3. Walk every product, update if it has a marketId that exists in API
   const updatedMenu = {};
   for (const [category, items] of Object.entries(menuObj)) {
     updatedMenu[category] = items.map(product => {
@@ -196,7 +216,9 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
       }
 
       // Pick MAXIMUM retail price for 1 kg
-      const maxRetailPerKg = range.max;
+      // For Fruits: user requested adding ₹10 to the max retail price
+      const isFruit = category === 'fruits' || apiItem._type === 'fruit';
+      const maxRetailPerKg = range.max + (isFruit ? 10 : 0);
 
       // Convert proportionally to product's weight in DB
       const weightInfo = parseWeightInfo(product.weight);
@@ -207,7 +229,7 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
       const convertedBasePrice = Math.max(1, maxRetailPerKg * weightInfo.ratio);
 
       // Calculate instant & morning prices with user margins
-      // Items up to 500g are rounded UP to next multiple of 10 (e.g. 7->10, 14->20, 26->30)
+      // Items up to 500g are rounded UP to next multiple of 10
       const priceInstant = applyMargin(convertedBasePrice, instantMargin, isUnderOrEqualTo500g);
       const priceMorning = applyMargin(convertedBasePrice, morningMargin, isUnderOrEqualTo500g);
 
@@ -227,7 +249,7 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
     });
   }
 
-  // 5. Save back to Firestore
+  // 4. Save back to Firestore
   await setDoc(INVENTORY_DOC, {
     menu: updatedMenu,
     updatedAt: serverTimestamp(),

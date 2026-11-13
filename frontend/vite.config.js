@@ -34,6 +34,18 @@ export default defineConfig({
           'Origin':     'https://vegetablemarketprice.com',
         },
       },
+      // Proxy for vegetablemarketprice.com Fruits API
+      '/fruits-api': {
+        target: 'https://vegetablemarketprice.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/fruits-api/, ''),
+        headers: {
+          'Referer':    'https://vegetablemarketprice.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Origin':     'https://vegetablemarketprice.com',
+        },
+      },
     },
   },
 });
