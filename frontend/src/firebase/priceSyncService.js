@@ -20,14 +20,16 @@
  */
 
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './config';
+import { db } from './config.js';
 
 const INVENTORY_DOC = doc(db, 'inventory', 'menu');
 
 // ── API URL builders ──────────────────────────────────────────────────────────
+const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
+
 function buildVegetablesApiUrl(date) {
   const directUrl = `https://vegetablemarketprice.com/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
-  if (import.meta.env.DEV) {
+  if (isDev) {
     return `/mandi-api/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
   }
   return `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
@@ -35,7 +37,7 @@ function buildVegetablesApiUrl(date) {
 
 function buildFruitsApiUrl(date) {
   const directUrl = `https://vegetablemarketprice.com/api/dataapi/fruits/westbengal/daywisedata?date=${date}`;
-  if (import.meta.env.DEV) {
+  if (isDev) {
     return `/fruits-api/api/dataapi/fruits/westbengal/daywisedata?date=${date}`;
   }
   return `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;

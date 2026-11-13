@@ -149,7 +149,7 @@ export default function AdminMenuPage() {
     if (list.length === 0) return '';
 
     const header =
-      `*Fresh Tokri — Aaj ki Bhav List*\n` +
+      `*Dr. Bhindi — Aaj ki Bhav List*\n` +
       `📅 ${dateLabel}\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
       `*${(catInfo?.label || categoryId).toUpperCase()}*\n`;
@@ -162,8 +162,8 @@ export default function AdminMenuPage() {
 
     const footer =
       `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `*Order karo Fresh Tokri par!*\n` +
-      `📱 freshtokri.in\n` +
+      `*Order karo Dr. Bhindi par!*\n` +
+      `📱 drbhindi.mrfryer.online\n` +
       `Same-day & morning delivery available`;
 
     return header + rows + footer;
@@ -385,8 +385,8 @@ export default function AdminMenuPage() {
                         setSelectedShareIds(null); // resets to select all for new category
                       }}
                       className={`text-[10px] font-bold px-2.5 py-1.5 rounded-full border transition ${shareCat === c.id
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-white text-slate-500 border-slate-200'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-slate-500 border-slate-200'
                         }`}
                     >
                       {c.icon} {c.label} ({cnt})
@@ -427,11 +427,10 @@ export default function AdminMenuPage() {
                     <div
                       key={p.id}
                       onClick={() => toggleSelectItem(p.id)}
-                      className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none border transition ${
-                        checked
+                      className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none border transition ${checked
                           ? 'bg-emerald-50/80 border-emerald-200 text-slate-900 font-semibold'
                           : 'bg-white border-slate-200 text-slate-400 opacity-60'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2 truncate">
                         {checked ? (
@@ -464,8 +463,8 @@ export default function AdminMenuPage() {
               <button
                 onClick={() => handleCopy(shareCat)}
                 className={`flex items-center justify-center gap-1.5 font-extrabold text-xs py-3 rounded-xl border transition active:scale-95 ${copied
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
                   }`}
               >
                 <Copy size={13} />
