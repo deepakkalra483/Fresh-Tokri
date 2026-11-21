@@ -1,10 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectDeliveryMode } from '../features/deliveryMode/deliveryModeSlice';
-import { selectCartItems, addToCart, removeFromCart } from '../features/cart/cartSlice';
+import {
+  selectCartItems,
+  openWeightModal,
+  removeProductCompletely,
+} from '../features/cart/cartSlice';
 import { selectAllProducts, openProductDetails } from '../features/products/productsSlice';
 import { selectCategories } from '../features/categories/categoriesSlice';
-import { Heart, Plus, Minus, ChevronLeft, ShoppingBag, Package } from 'lucide-react';
+import { Heart, ChevronLeft, ShoppingBag, Package, SlidersHorizontal, Trash2 } from 'lucide-react';
 
 
 
@@ -97,9 +101,23 @@ export default function CategoriesPage() {
           ) : (
             <div className="grid grid-cols-2 gap-2">
               {currentProducts.map((p) => {
-                const qty = cartItems[p.id] || 0;
                 const price = currentMode === 'instant' ? p.priceInstant : p.priceMorning;
                 const isFav = favorites[p.id];
+
+                const productCartEntries = Object.entries(cartItems).filter(([k, val]) => {
+                  return val?.id === p.id || k === p.id || k.startsWith(`${p.id}_`);
+                });
+
+                const totalQty = productCartEntries.reduce((sum, [_, val]) => {
+                  const q = typeof val === 'number' ? val : (val?.quantity || 0);
+                  return sum + q;
+                }, 0);
+
+                const firstEntry = productCartEntries[0];
+                const firstVariantWeight =
+                  firstEntry && typeof firstEntry[1] === 'object'
+                    ? firstEntry[1].selectedWeight
+                    : null;
 
                 return (
                   <div
@@ -146,7 +164,7 @@ export default function CategoriesPage() {
 
                       {/* Weight tag */}
                       <div className="inline-flex items-center gap-1 bg-slate-100 text-slate-600 font-bold text-[9px] px-1.5 py-0.5 rounded">
-                        <span>⚖️ {p.weight}</span>
+                        <span>⚖️ {firstVariantWeight ? `Added: ${firstVariantWeight}` : p.weight}</span>
                       </div>
 
                       {/* Name */}
@@ -156,7 +174,7 @@ export default function CategoriesPage() {
                     </div>
 
                     {/* Price & Add */}
-                    <div className="mt-1.5 pt-1 border-t border-slate-100 flex items-center justify-between">
+                    <div className="mt-1.5 pt-1 border-t border-slate-100 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
                       <div>
                         <div className="text-xs font-extrabold text-slate-900">₹{price}</div>
                         {p.oldPrice && (
@@ -164,22 +182,31 @@ export default function CategoriesPage() {
                         )}
                       </div>
 
-                      {qty === 0 ? (
+                      {totalQty === 0 ? (
                         <button
-                          onClick={(e) => { e.stopPropagation(); dispatch(addToCart(p.id)); }}
+                          onClick={() => dispatch(openWeightModal(p))}
                           className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-1 rounded-xl shadow-2xs transition flex items-center gap-0.5 active:scale-95"
                         >
                           <ShoppingBag size={10} />
                           <span>Add</span>
                         </button>
                       ) : (
-                        <div className="flex items-center bg-emerald-600 text-white rounded-xl text-[10px] font-bold px-1.5 py-0.5 gap-1 shadow-2xs">
-                          <button onClick={(e) => { e.stopPropagation(); dispatch(removeFromCart(p.id)); }} className="px-0.5 hover:opacity-75">
-                            <Minus size={10} />
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => dispatch(openWeightModal(p))}
+                            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[9px] font-black px-1.5 py-1 flex items-center gap-0.5 shadow-2xs active:scale-95 transition"
+                            title="Change size or quantity"
+                          >
+                            <span>{firstVariantWeight ? firstVariantWeight : `${totalQty} Added`}</span>
+                            <SlidersHorizontal size={8} />
                           </button>
-                          <span className="text-[10px] font-extrabold">{qty}</span>
-                          <button onClick={(e) => { e.stopPropagation(); dispatch(addToCart(p.id)); }} className="px-0.5 hover:opacity-75">
-                            <Plus size={10} />
+
+                          <button
+                            onClick={() => dispatch(removeProductCompletely(p.id))}
+                            className="w-5 h-5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center transition active:scale-90"
+                            title="Remove from cart"
+                          >
+                            <Trash2 size={10} strokeWidth={2.5} />
                           </button>
                         </div>
                       )}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import { addToCart, openCheckout } from '../features/cart/cartSlice';
+import { useSelector, useDispatch } from 'react-redux';
+import { addVariantToCart, addToCart, openCheckout } from '../features/cart/cartSlice';
+import { selectAllProducts } from '../features/products/productsSlice';
 import {
   ShoppingBag, Clock, Zap, Sun, MapPin, Navigation,
   MessageCircle, ChevronDown, ChevronUp, RefreshCw, Trash2,
@@ -156,6 +157,7 @@ function OrderCard({ order, onReorder }) {
 // ── Main Orders Page ──────────────────────────────────────────────────────────
 export default function OrdersPage() {
   const dispatch = useDispatch();
+  const allProducts = useSelector(selectAllProducts);
   const [orders, setOrders] = useState([]);
 
   // Load on mount; refresh when window gains focus (user came back from WhatsApp)
@@ -167,11 +169,21 @@ export default function OrdersPage() {
   }, []);
 
   const handleReorder = (order) => {
-    // Re-add each item to Redux cart by product ID stored in the order
+    // Re-add each item to Redux cart with variant weight and price if available
     order.items.forEach((item) => {
       const id = item.productId || item.id;
-      if (id) {
-        for (let i = 0; i < item.qty; i++) {
+      const product = allProducts.find((p) => p.id === id);
+      if (product) {
+        dispatch(
+          addVariantToCart({
+            product,
+            selectedWeight: item.selectedWeight || product.weight,
+            unitPrice: item.price || product.priceInstant,
+            quantity: item.qty || 1,
+          })
+        );
+      } else if (id) {
+        for (let i = 0; i < (item.qty || 1); i++) {
           dispatch(addToCart(id));
         }
       }

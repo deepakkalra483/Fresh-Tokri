@@ -2,8 +2,12 @@ import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectSelectedProduct, selectIsDetailsModalOpen, closeProductDetails } from '../../features/products/productsSlice';
 import { selectDeliveryMode } from '../../features/deliveryMode/deliveryModeSlice';
-import { selectCartItems, addToCart, removeFromCart } from '../../features/cart/cartSlice';
-import { X, Heart, Plus, Minus } from 'lucide-react';
+import {
+  selectCartItems,
+  openWeightModal,
+  removeProductCompletely,
+} from '../../features/cart/cartSlice';
+import { X, Heart, SlidersHorizontal, Trash2 } from 'lucide-react';
 
 export default function ProductDetailsModal() {
   const dispatch = useDispatch();
@@ -16,7 +20,22 @@ export default function ProductDetailsModal() {
 
   if (!isOpen || !product) return null;
 
-  const qty = cartItems[product.id] || 0;
+  // Find all cart entries for this product
+  const productCartEntries = Object.entries(cartItems).filter(([k, val]) => {
+    return val?.id === product.id || k === product.id || k.startsWith(`${product.id}_`);
+  });
+
+  const totalQty = productCartEntries.reduce((sum, [_, val]) => {
+    const q = typeof val === 'number' ? val : (val?.quantity || 0);
+    return sum + q;
+  }, 0);
+
+  const firstEntry = productCartEntries[0];
+  const firstVariantWeight =
+    firstEntry && typeof firstEntry[1] === 'object'
+      ? firstEntry[1].selectedWeight
+      : null;
+
   const price = currentMode === 'instant' ? product.priceInstant : product.priceMorning;
   const oldPrice = product.oldPrice || (currentMode === 'morning' ? product.priceInstant : null);
 
@@ -105,27 +124,31 @@ export default function ProductDetailsModal() {
                 </p>
               </div>
 
-              {qty === 0 ? (
+              {totalQty === 0 ? (
                 <button
-                  onClick={() => dispatch(addToCart(product.id))}
+                  onClick={() => dispatch(openWeightModal(product))}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl shadow-sm transition active:scale-95"
                 >
-                  + ADD TO TOKRI
+                  + SELECT SIZE / ADD
                 </button>
               ) : (
-                <div className="flex items-center bg-emerald-600 text-white rounded-xl text-xs font-bold px-3 py-1.5 gap-3 shadow">
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => dispatch(removeFromCart(product.id))}
-                    className="px-1 hover:opacity-75 active:scale-90 transition-all"
+                    onClick={() => dispatch(openWeightModal(product))}
+                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-extrabold px-3.5 py-2 flex items-center gap-1.5 shadow-2xs active:scale-95 transition"
+                    title="Change size or quantity"
                   >
-                    <Minus size={14} />
+                    <span>{firstVariantWeight ? firstVariantWeight : `${totalQty} Added`}</span>
+                    <SlidersHorizontal size={13} />
                   </button>
-                  <span className="font-extrabold text-sm">{qty}</span>
+
                   <button
-                    onClick={() => dispatch(addToCart(product.id))}
-                    className="px-1 hover:opacity-75 active:scale-90 transition-all"
+                    onClick={() => dispatch(removeProductCompletely(product.id))}
+                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold flex items-center gap-1 active:scale-95 transition shadow-2xs"
+                    title="Remove from cart"
                   >
-                    <Plus size={14} />
+                    <Trash2 size={13} strokeWidth={2} />
+                    <span>Remove</span>
                   </button>
                 </div>
               )}

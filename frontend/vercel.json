@@ -3,7 +3,17 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/mandi-api/(.*)",
+      "destination": "https://vegetablemarketprice.com/$1"
+    },
+    {
+      "source": "/fruits-api/(.*)",
+      "destination": "https://vegetablemarketprice.com/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
-

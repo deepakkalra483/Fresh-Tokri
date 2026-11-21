@@ -10,7 +10,10 @@ import {
   Plus, Pencil, Trash2, Save, X, Package, Layers,
   ToggleLeft, ToggleRight, RefreshCw, CheckCircle2, AlertCircle,
   Share2, Copy, MessageCircle, ChevronDown, CheckSquare, Square,
+  Download, Image as ImageIcon,
 } from 'lucide-react';
+import { shareRateCardToWhatsApp, downloadRateCardImage } from '../../utils/rateCardImageGenerator';
+import { calculateVariantPrice, isPieceBasedProduct } from '../../utils/weightHelper';
 
 // ── Defined OUTSIDE the component so it doesn't remount on every render ────────
 // (putting components inside another component's render body causes keyboard dismiss)
@@ -60,6 +63,7 @@ export default function AdminMenuPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [shareCat, setShareCat] = useState('vegetables');
   const [copied, setCopied] = useState(false);
+  const [sharingImage, setSharingImage] = useState(false);
   // Set of product IDs selected for WhatsApp broadcast
   const [selectedShareIds, setSelectedShareIds] = useState(null);
 
@@ -181,6 +185,35 @@ export default function AdminMenuPage() {
     const text = buildShareText(categoryId);
     const encoded = encodeURIComponent(text);
     window.open(`https://wa.me/?text=${encoded}`, '_blank');
+  };
+
+  const handleShareImageWhatsApp = async (categoryId) => {
+    const catInfo = CATEGORIES.find(c => c.id === categoryId);
+    const inStock = getCatInStockProducts(categoryId);
+    const list = inStock.filter(p => isItemSelected(p.id));
+    if (list.length === 0) {
+      alert('Please select at least one item to share.');
+      return;
+    }
+    setSharingImage(true);
+    try {
+      await shareRateCardToWhatsApp(list, { categoryTitle: catInfo?.label || categoryId });
+    } catch (err) {
+      console.error('Share image failed:', err);
+    } finally {
+      setSharingImage(false);
+    }
+  };
+
+  const handleDownloadImage = (categoryId) => {
+    const catInfo = CATEGORIES.find(c => c.id === categoryId);
+    const inStock = getCatInStockProducts(categoryId);
+    const list = inStock.filter(p => isItemSelected(p.id));
+    if (list.length === 0) {
+      alert('Please select at least one item to download.');
+      return;
+    }
+    downloadRateCardImage(list, { categoryTitle: catInfo?.label || categoryId });
   };
 
   // ── Sync handler ─────────────────────────────────────────────────────────────
@@ -428,8 +461,8 @@ export default function AdminMenuPage() {
                       key={p.id}
                       onClick={() => toggleSelectItem(p.id)}
                       className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none border transition ${checked
-                          ? 'bg-emerald-50/80 border-emerald-200 text-slate-900 font-semibold'
-                          : 'bg-white border-slate-200 text-slate-400 opacity-60'
+                        ? 'bg-emerald-50/80 border-emerald-200 text-slate-900 font-semibold'
+                        : 'bg-white border-slate-200 text-slate-400 opacity-60'
                         }`}
                     >
                       <div className="flex items-center gap-2 truncate">
@@ -449,36 +482,99 @@ export default function AdminMenuPage() {
               </div>
             </div>
 
-            {/* Preview box */}
-            <div className="bg-[#f0fdf4] rounded-xl p-3 border border-emerald-200">
-              <p className="text-[9px] text-slate-400 font-bold uppercase mb-1.5 tracking-wide">📋 Preview (Clean Single-Line Format)</p>
-              <pre className="text-[11px] text-slate-800 font-sans whitespace-pre-wrap leading-5 max-h-48 overflow-y-auto font-medium">
-                {buildShareText(shareCat) || 'No items selected.'}
-              </pre>
+            {/* Excel-style 4-Column Rate Sheet Preview */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
+              <div className="bg-slate-900 text-white px-3 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <ImageIcon size={13} className="text-emerald-400" />
+                  <span className="text-[11px] font-black tracking-wide uppercase">
+                    Rate Card Preview ({getCatInStockProducts(shareCat).filter(p => isItemSelected(p.id)).length} items)
+                  </span>
+                </div>
+                <span className="text-[9px] text-emerald-300 font-bold bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                  Excel Image Format
+                </span>
+              </div>
+
+              <div className="max-h-56 overflow-y-auto overflow-x-auto">
+                <table className="w-full text-left text-[11px] border-collapse">
+                  <thead className="bg-slate-100 text-slate-700 font-extrabold sticky top-0 border-b border-slate-200 text-[10px]">
+                    <tr>
+                      <th className="py-2 px-2.5">Item Name</th>
+                      <th className="py-2 px-2 text-center text-emerald-800">250 gm</th>
+                      <th className="py-2 px-2 text-center text-emerald-800">500 gm</th>
+                      <th className="py-2 px-2 text-center text-emerald-800">1 kg</th>
+                      <th className="py-2 px-2 text-center text-emerald-800">2 kg</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {getCatInStockProducts(shareCat).filter(p => isItemSelected(p.id)).length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-4 text-center text-slate-400 italic">
+                          No items selected. Select items above to include in the rate card.
+                        </td>
+                      </tr>
+                    ) : (
+                      getCatInStockProducts(shareCat).filter(p => isItemSelected(p.id)).map((p, idx) => {
+                        const isPiece = isPieceBasedProduct(p.weight);
+                        const baseWeight = p.weight || '500 gm';
+                        const p250 = calculateVariantPrice(p.priceInstant, baseWeight, isPiece ? '1 pc' : '250 gm', p.marketPrice1Kg);
+                        const p500 = calculateVariantPrice(p.priceInstant, baseWeight, isPiece ? '2 pcs' : '500 gm', p.marketPrice1Kg);
+                        const p1kg = calculateVariantPrice(p.priceInstant, baseWeight, isPiece ? '3 pcs' : '1 kg', p.marketPrice1Kg);
+                        const p2kg = calculateVariantPrice(p.priceInstant, baseWeight, isPiece ? '4 pcs' : '2 kg', p.marketPrice1Kg);
+
+                        return (
+                          <tr key={p.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}>
+                            <td className="py-1.5 px-2.5 font-bold text-slate-900 truncate max-w-[140px]">
+                              {p.name}
+                            </td>
+                            <td className="py-1.5 px-2 text-center font-extrabold text-emerald-700">₹{p250}</td>
+                            <td className="py-1.5 px-2 text-center font-extrabold text-emerald-700">₹{p500}</td>
+                            <td className="py-1.5 px-2 text-center font-extrabold text-emerald-700">₹{p1kg}</td>
+                            <td className="py-1.5 px-2 text-center font-extrabold text-emerald-700">₹{p2kg}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Action buttons */}
-            <div className="grid grid-cols-2 gap-2">
-              {/* Copy */}
+            <div className="space-y-2 pt-1">
+              {/* Primary: Share on WhatsApp as Image */}
               <button
-                onClick={() => handleCopy(shareCat)}
-                className={`flex items-center justify-center gap-1.5 font-extrabold text-xs py-3 rounded-xl border transition active:scale-95 ${copied
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
-                  }`}
+                onClick={() => handleShareImageWhatsApp(shareCat)}
+                disabled={sharingImage}
+                className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5d] active:scale-[0.98] text-white font-extrabold text-xs py-3 rounded-xl transition shadow-md disabled:opacity-50"
               >
-                <Copy size={13} />
-                {copied ? '✅ Copied!' : 'Copy Text'}
+                <MessageCircle size={16} />
+                <span>{sharingImage ? 'Generating Rate Card Image...' : 'Share Rate Card Image on WhatsApp'}</span>
               </button>
 
-              {/* WhatsApp */}
-              <button
-                onClick={() => handleWhatsApp(shareCat)}
-                className="flex items-center justify-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white font-extrabold text-xs py-3 rounded-xl transition active:scale-95 shadow-sm"
-              >
-                <MessageCircle size={13} />
-                Share on WhatsApp
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Download Image (PNG) */}
+                <button
+                  onClick={() => handleDownloadImage(shareCat)}
+                  className="flex items-center justify-center gap-1.5 font-extrabold text-xs py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 active:scale-95 transition shadow-2xs"
+                >
+                  <Download size={13} />
+                  <span>Download Image</span>
+                </button>
+
+                {/* Copy Text */}
+                <button
+                  onClick={() => handleCopy(shareCat)}
+                  className={`flex items-center justify-center gap-1.5 font-extrabold text-xs py-2.5 rounded-xl border transition active:scale-95 ${copied
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                    }`}
+                >
+                  <Copy size={13} />
+                  <span>{copied ? '✅ Copied!' : 'Copy Text'}</span>
+                </button>
+              </div>
             </div>
 
             <p className="text-[9px] text-slate-400 text-center">

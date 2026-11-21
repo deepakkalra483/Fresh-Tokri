@@ -23,6 +23,37 @@ export default defineConfig({
         secure: false,
       },
       // Proxy for vegetablemarketprice.com API (avoids browser CORS block)
+      '/api/mandi': {
+        target: 'https://vegetablemarketprice.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => {
+          const u = new URL('http://localhost' + path);
+          const date = u.searchParams.get('date') || '';
+          return `/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
+        },
+        headers: {
+          'Referer':    'https://vegetablemarketprice.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Origin':     'https://vegetablemarketprice.com',
+        },
+      },
+      // Proxy for vegetablemarketprice.com Fruits API
+      '/api/fruits': {
+        target: 'https://vegetablemarketprice.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => {
+          const u = new URL('http://localhost' + path);
+          const date = u.searchParams.get('date') || '';
+          return `/api/dataapi/fruits/westbengal/daywisedata?date=${date}`;
+        },
+        headers: {
+          'Referer':    'https://vegetablemarketprice.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Origin':     'https://vegetablemarketprice.com',
+        },
+      },
       '/mandi-api': {
         target: 'https://vegetablemarketprice.com',
         changeOrigin: true,
@@ -34,7 +65,6 @@ export default defineConfig({
           'Origin':     'https://vegetablemarketprice.com',
         },
       },
-      // Proxy for vegetablemarketprice.com Fruits API
       '/fruits-api': {
         target: 'https://vegetablemarketprice.com',
         changeOrigin: true,

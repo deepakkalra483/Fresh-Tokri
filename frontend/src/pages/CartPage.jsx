@@ -3,22 +3,22 @@ import { useSelector, useDispatch } from 'react-redux';
 import {
   selectCartItems,
   selectCartTotals,
-  addToCart,
   removeFromCart,
   openCheckout,
-  clearCart
+  clearCart,
+  openWeightModal,
 } from '../features/cart/cartSlice';
 import { selectDeliveryMode } from '../features/deliveryMode/deliveryModeSlice';
 import {
   ShoppingCart,
   Plus,
-  Minus,
   Trash2,
   ArrowRight,
   ShoppingBag,
   Sparkles,
   Zap,
-  Sun
+  Sun,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export default function CartPage({ onTabChange }) {
@@ -29,11 +29,42 @@ export default function CartPage({ onTabChange }) {
   const products = useSelector((state) => state.products.productsList);
 
   const cartProductList = Object.entries(cartItems)
-    .map(([id, qty]) => {
-      const p = products.find((prod) => prod.id === id);
+    .map(([key, val]) => {
+      let productId = key;
+      let qty = 1;
+      let selectedWeight = null;
+      let unitPrice = null;
+
+      if (typeof val === 'number') {
+        qty = val;
+      } else if (val && typeof val === 'object') {
+        productId = val.id;
+        qty = val.quantity;
+        selectedWeight = val.selectedWeight;
+        unitPrice = val.unitPrice;
+      }
+
+      const p = products.find((prod) => prod.id === productId);
       if (!p) return null;
-      const unitPrice = mode === 'instant' ? p.priceInstant : p.priceMorning;
-      return { ...p, qty, unitPrice };
+
+      const finalWeight = selectedWeight || p.weight || '500 gm';
+      const finalUnitPrice =
+        unitPrice !== null && unitPrice !== undefined
+          ? mode === 'instant'
+            ? unitPrice
+            : Math.round(unitPrice * 0.8)
+          : mode === 'instant'
+          ? p.priceInstant
+          : p.priceMorning;
+
+      return {
+        ...p,
+        rawProduct: p,
+        cartKey: key,
+        qty,
+        unitPrice: finalUnitPrice,
+        selectedWeight: finalWeight,
+      };
     })
     .filter(Boolean);
 
@@ -99,7 +130,7 @@ export default function CartPage({ onTabChange }) {
       {/* Cart Items List */}
       <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden shadow-xs">
         {cartProductList.map((item) => (
-          <div key={item.id} className="p-3 flex items-center gap-3">
+          <div key={item.cartKey} className="p-3 flex items-center gap-3">
             <img
               src={item.image}
               alt={item.name}
@@ -110,35 +141,43 @@ export default function CartPage({ onTabChange }) {
             />
             <div className="flex-1 min-w-0">
               <h3 className="text-xs font-bold text-slate-900 truncate">{item.name}</h3>
-              <p className="text-[10px] text-slate-400">{item.weight}</p>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.5 rounded">
+                  {item.selectedWeight}
+                </span>
+                {item.qty > 1 && (
+                  <span className="text-[10px] font-extrabold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                    × {item.qty}
+                  </span>
+                )}
+                <button
+                  onClick={() => dispatch(openWeightModal(item.rawProduct))}
+                  className="text-[9px] font-bold text-slate-500 hover:text-emerald-700 underline flex items-center gap-0.5 ml-1"
+                >
+                  <SlidersHorizontal size={9} />
+                  Change
+                </button>
+              </div>
+              <div className="flex items-baseline gap-1.5 mt-1">
                 <span className="text-xs font-extrabold text-slate-900">
                   ₹{item.unitPrice * item.qty}
                 </span>
-                <span className="text-[10px] text-slate-400">
-                  (₹{item.unitPrice} each)
-                </span>
+                {item.qty > 1 && (
+                  <span className="text-[10px] text-slate-400">
+                    (₹{item.unitPrice} each)
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Stepper */}
-            <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200 flex-shrink-0">
-              <button
-                onClick={() => dispatch(removeFromCart(item.id))}
-                className="w-6 h-6 flex items-center justify-center rounded-md bg-white text-slate-700 shadow-2xs hover:bg-slate-50 active:scale-95 transition-all"
-              >
-                <Minus size={11} />
-              </button>
-              <span className="w-7 text-center text-xs font-black text-slate-900 tabular-nums">
-                {item.qty}
-              </span>
-              <button
-                onClick={() => dispatch(addToCart(item.id))}
-                className="w-6 h-6 flex items-center justify-center rounded-md bg-emerald-600 text-white shadow-2xs hover:bg-emerald-700 active:scale-95 transition-all"
-              >
-                <Plus size={11} />
-              </button>
-            </div>
+            {/* Remove item button */}
+            <button
+              onClick={() => dispatch(removeFromCart(item.cartKey))}
+              className="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/70 flex items-center justify-center active:scale-95 transition-all shadow-2xs flex-shrink-0"
+              title="Remove from cart"
+            >
+              <Trash2 size={13} strokeWidth={2.2} />
+            </button>
           </div>
         ))}
       </div>

@@ -43,6 +43,7 @@ import CheckoutDrawer from './components/checkout/CheckoutDrawer';
 import ProductDetailsModal from './components/home/ProductDetailsModal';
 import AddressModal from './components/address/AddressModal';
 import OTPModal from './components/auth/OTPModal'; // kept for profile login
+import WeightSelectionModal from './components/common/WeightSelectionModal';
 
 // Auth Screens
 import AdminLoginScreen from './components/auth/AdminLoginScreen';
@@ -108,6 +109,7 @@ function CustomerApp() {
       <CheckoutDrawer />
       <ProductDetailsModal />
       <AddressModal />
+      <WeightSelectionModal />
     </Shell>
   );
 }

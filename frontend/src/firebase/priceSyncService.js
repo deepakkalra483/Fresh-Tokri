@@ -24,23 +24,44 @@ import { db } from './config.js';
 
 const INVENTORY_DOC = doc(db, 'inventory', 'menu');
 
-// ── API URL builders ──────────────────────────────────────────────────────────
-const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
-
-function buildVegetablesApiUrl(date) {
-  const directUrl = `https://vegetablemarketprice.com/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
-  if (isDev) {
-    return `/mandi-api/api/dataapi/market/bhiwani/daywisedata?date=${date}`;
+// ── Multi-endpoint robust fetch ──────────────────────────────────────────────
+async function fetchEndpointData(candidateUrls) {
+  let lastError = null;
+  for (const url of candidateUrls) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.trim().startsWith('{')) {
+          const json = JSON.parse(text);
+          if (Array.isArray(json?.data) && json.data.length > 0) {
+            return json.data;
+          }
+        }
+      }
+    } catch (err) {
+      lastError = err;
+    }
   }
-  return `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
+  throw lastError || new Error('Could not fetch data from any candidate endpoint');
 }
 
-function buildFruitsApiUrl(date) {
-  const directUrl = `https://vegetablemarketprice.com/api/dataapi/fruits/westbengal/daywisedata?date=${date}`;
-  if (isDev) {
-    return `/fruits-api/api/dataapi/fruits/westbengal/daywisedata?date=${date}`;
-  }
-  return `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
+async function fetchVegetablesData(dateStr) {
+  const urls = [
+    `/api/mandi?date=${dateStr}`,
+    `/mandi-api/api/dataapi/market/bhiwani/daywisedata?date=${dateStr}`,
+    `https://vegetablemarketprice.com/api/dataapi/market/bhiwani/daywisedata?date=${dateStr}`,
+  ];
+  return fetchEndpointData(urls);
+}
+
+async function fetchFruitsData(dateStr) {
+  const urls = [
+    `/api/fruits?date=${dateStr}`,
+    `/fruits-api/api/dataapi/fruits/westbengal/daywisedata?date=${dateStr}`,
+    `https://vegetablemarketprice.com/api/dataapi/fruits/westbengal/daywisedata?date=${dateStr}`,
+  ];
+  return fetchEndpointData(urls);
 }
 
 // ── Get today's date string in YYYY-MM-DD ─────────────────────────────────────
@@ -110,25 +131,41 @@ function parseWeightInfo(weightStr) {
   return { ratio: 0.5, grams: 500 };
 }
 
-// ── Round up to next multiple of 10 ───────────────────────────────────────────
-// e.g. 7 -> 10, 10 -> 10, 16 -> 20, 21 -> 30
-function roundUpTo10(num) {
-  if (num <= 0) return 10;
-  return Math.ceil(num / 10) * 10;
-}
-
-// ── Add margin % and round ────────────────────────────────────────────────────
-function applyMargin(base, marginPct, isUnderOrEqualTo500g = false) {
+// ── Calculate price based on user-defined weight pricing logic ────────────────
+/**
+ * Rule:
+ *  - 1 kg base rate = max retail price from API + user input percentage margin
+ *  - If weight <= 300g: proportional price is doubled, rounded up to next multiple of 10
+ *  - If weight between 300g and 500g (e.g. 500 gm): proportional price + 10 rupees, rounded up to next multiple of 10
+ *  - If weight > 500g (e.g. 1 kg, 2 kg): standard proportional price (rate1Kg) without extra 10 rupees
+ */
+function computePriceForWeight(maxRetailPerKg, marginPct, weightInfo) {
   const pct = parseFloat(marginPct) || 0;
-  const rawWithMargin = base + (base * pct / 100);
+  const rate1Kg = maxRetailPerKg + (maxRetailPerKg * pct / 100);
 
-  // If item is up to 500g (e.g. 50g, 100g, 200g, 250g, 500g), round UP to next multiple of 10
-  if (isUnderOrEqualTo500g) {
-    return roundUpTo10(rawWithMargin);
+  // Piece-based items (e.g. 1 pc, 2 pcs)
+  if (!weightInfo.grams || weightInfo.grams === 0) {
+    const raw = rate1Kg * (weightInfo.ratio || 0.5);
+    return Math.max(1, Math.round(raw));
   }
 
-  // Above 500g (e.g. 1 kg+): standard rounding to nearest Rs 1
-  return Math.max(1, Math.round(rawWithMargin));
+  const grams = weightInfo.grams;
+  const proportional = (rate1Kg / 1000) * grams;
+
+  // 1. Less than or equal to 300 grams (e.g. 100g, 250g) -> doubled, ceiling to multiple of 10
+  if (grams <= 300) {
+    const doubled = proportional * 2;
+    return Math.max(10, Math.ceil(doubled / 10) * 10);
+  }
+
+  // 2. Between 300 grams and 500 grams (e.g. 500 gm) -> increase 10 rupees, ceiling to multiple of 10
+  if (grams <= 500) {
+    const withTen = proportional + 10;
+    return Math.max(10, Math.ceil(withTen / 10) * 10);
+  }
+
+  // 3. More than 500 grams (e.g. 1 kg, 2 kg) -> standard proportional rate (1 kg = rate1Kg)
+  return Math.max(1, Math.round(proportional));
 }
 
 // ── Auto discount label ───────────────────────────────────────────────────────
@@ -153,14 +190,10 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
 
   // Fetch Vegetables (Bhiwani)
   try {
-    const vegUrl = buildVegetablesApiUrl(dateStr);
-    const res = await fetch(vegUrl);
-    if (res.ok) {
-      const json = await res.json();
-      if (Array.isArray(json?.data)) {
-        for (const item of json.data) {
-          mandiMap[item.id] = { ...item, _type: 'vegetable' };
-        }
+    const vegData = await fetchVegetablesData(dateStr);
+    if (Array.isArray(vegData)) {
+      for (const item of vegData) {
+        mandiMap[item.id] = { ...item, _type: 'vegetable' };
       }
     }
   } catch (err) {
@@ -170,14 +203,10 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
 
   // Fetch Fruits (West Bengal / National rates)
   try {
-    const fruitUrl = buildFruitsApiUrl(dateStr);
-    const res = await fetch(fruitUrl);
-    if (res.ok) {
-      const json = await res.json();
-      if (Array.isArray(json?.data)) {
-        for (const item of json.data) {
-          mandiMap[item.id] = { ...item, _type: 'fruit' };
-        }
+    const fruitData = await fetchFruitsData(dateStr);
+    if (Array.isArray(fruitData)) {
+      for (const item of fruitData) {
+        mandiMap[item.id] = { ...item, _type: 'fruit' };
       }
     }
   } catch (err) {
@@ -224,20 +253,19 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
 
       // Convert proportionally to product's weight in DB
       const weightInfo = parseWeightInfo(product.weight);
-      // Items up to 500 grams (50g, 100g, 200g, 250g, 500g, etc.)
-      const isUnderOrEqualTo500g = weightInfo.grams > 0 && weightInfo.grams <= 500;
 
-      // Raw converted price before margin
-      const convertedBasePrice = Math.max(1, maxRetailPerKg * weightInfo.ratio);
+      // Compute instant and morning prices with new pricing formula
+      const priceInstant = computePriceForWeight(maxRetailPerKg, instantMargin, weightInfo);
+      const priceMorning = computePriceForWeight(maxRetailPerKg, morningMargin, weightInfo);
 
-      // Calculate instant & morning prices with user margins
-      // Items up to 500g are rounded UP to next multiple of 10
-      const priceInstant = applyMargin(convertedBasePrice, instantMargin, isUnderOrEqualTo500g);
-      const priceMorning = applyMargin(convertedBasePrice, morningMargin, isUnderOrEqualTo500g);
+      // 1kg rate for reference and variant calculation
+      const rate1KgInstant = maxRetailPerKg + (maxRetailPerKg * (parseFloat(instantMargin) || 0) / 100);
 
-      // MRP / oldPrice: mark up over instant price (rounded nicely)
-      const rawOldPrice = isUnderOrEqualTo500g ? priceInstant + 10 : Math.max(priceInstant + 2, Math.round(priceInstant * 1.25));
-      const oldPrice = isUnderOrEqualTo500g ? roundUpTo10(rawOldPrice) : rawOldPrice;
+      // MRP / oldPrice: mark up over instant price
+      const isUnder500g = weightInfo.grams <= 500;
+      const oldPrice = isUnder500g
+        ? priceInstant + 10
+        : Math.max(priceInstant + 10, Math.round(priceInstant * 1.2));
       const discount = calcDiscount(priceInstant, oldPrice);
 
       result.updated++;
@@ -247,6 +275,7 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
         priceMorning,
         oldPrice,
         discount,
+        marketPrice1Kg: Math.round(rate1KgInstant),
       };
     });
   }

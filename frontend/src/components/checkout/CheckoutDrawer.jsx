@@ -107,12 +107,45 @@ export default function CheckoutDrawer() {
   if (!isOpen) return null;
 
   // Build formatted cart items
-  const formattedItems = Object.entries(cartItems).map(([id, qty]) => {
-    const p = products.find((x) => x.id === id);
-    if (!p) return null;
-    const price = mode === 'instant' ? p.priceInstant : p.priceMorning;
-    return { id: p.id, name: `${p.name} (${p.weight})`, price, qty };
-  }).filter(Boolean);
+  const formattedItems = Object.entries(cartItems)
+    .map(([key, val]) => {
+      let productId = key;
+      let qty = 1;
+      let selectedWeight = null;
+      let unitPrice = null;
+
+      if (typeof val === 'number') {
+        qty = val;
+      } else if (val && typeof val === 'object') {
+        productId = val.id;
+        qty = val.quantity;
+        selectedWeight = val.selectedWeight;
+        unitPrice = val.unitPrice;
+      }
+
+      const p = products.find((x) => x.id === productId);
+      if (!p) return null;
+
+      const finalWeight = selectedWeight || p.weight || '500 gm';
+      const finalPrice =
+        unitPrice !== null && unitPrice !== undefined
+          ? mode === 'instant'
+            ? unitPrice
+            : Math.round(unitPrice * 0.8)
+          : mode === 'instant'
+          ? p.priceInstant
+          : p.priceMorning;
+
+      return {
+        id: p.id,
+        cartKey: key,
+        name: `${p.name} (${finalWeight})`,
+        weight: finalWeight,
+        price: finalPrice,
+        qty,
+      };
+    })
+    .filter(Boolean);
 
   // Delivery fee logic (same threshold as CartPage)
   const itemsTotal = totals.finalTotal;
@@ -178,6 +211,7 @@ export default function CheckoutDrawer() {
         name: i.name,
         qty: i.qty,
         price: i.price,
+        selectedWeight: i.weight,
       })),
       totalPaid: toPay,
       mode,
@@ -248,7 +282,7 @@ export default function CheckoutDrawer() {
             {showItems && (
               <div className="px-3 pb-3 space-y-1 border-t border-slate-200 pt-2">
                 {formattedItems.map((item) => (
-                  <div key={item.id} className="flex justify-between text-[11px] text-slate-700">
+                  <div key={item.cartKey || item.id} className="flex justify-between text-[11px] text-slate-700">
                     <span className="font-medium">{item.name} <span className="text-slate-400">×{item.qty}</span></span>
                     <span className="font-bold">₹{item.price * item.qty}</span>
                   </div>
