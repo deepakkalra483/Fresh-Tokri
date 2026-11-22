@@ -71,9 +71,11 @@ export function getBaseGrams(weightStr) {
 /**
  * Calculates rate for a target weight or count relative to product's base weight and unit price.
  * User rules:
- *   - Target weight <= 300g: proportional price doubled, then rounded up to next multiple of 10
- *   - Target weight between 300g and 500g (e.g. 500 gm): proportional price + 10 rupees, rounded up to next multiple of 10
- *   - Target weight > 500g (e.g. 1 kg, 2 kg): standard proportional price (1 kg = rate1Kg = max retail + margin %)
+ *   - 1 kg rate is rounded off to multiple of 10.
+ *   - Other weights are converted from 1 kg rate WITHOUT round off to 10:
+ *     - Target weight <= 300g (e.g. 250 gm, 100 gm): proportional + 50% (proportional * 1.5)
+ *     - Target weight 300g to 500g (e.g. 500 gm): proportional + 30% (proportional * 1.3)
+ *     - Target weight > 500g (e.g. 1 kg, 2 kg): exact proportional from 1 kg rate
  */
 export function calculateVariantPrice(basePrice, baseWeightStr, targetWeightStr, marketPrice1Kg = null) {
   if (!basePrice || basePrice <= 0) return 0;
@@ -89,35 +91,35 @@ export function calculateVariantPrice(basePrice, baseWeightStr, targetWeightStr,
   const baseGrams = getBaseGrams(baseWeightStr);
   const targetGrams = getBaseGrams(targetWeightStr);
 
-  // Determine true 1kg rate
+  // Determine true 1kg rate (rounded to multiple of 10)
   let ratePerKg = marketPrice1Kg;
   if (!ratePerKg || ratePerKg <= 0) {
     if (baseGrams > 500) {
-      ratePerKg = Math.max(1, basePrice / (baseGrams / 1000));
+      ratePerKg = Math.max(10, Math.ceil((basePrice / (baseGrams / 1000)) / 10) * 10);
     } else if (baseGrams <= 300) {
-      ratePerKg = Math.max(1, (basePrice / 2) / (baseGrams / 1000));
+      const raw1Kg = (basePrice / 1.5) / (baseGrams / 1000);
+      ratePerKg = Math.max(10, Math.ceil(raw1Kg / 10) * 10);
     } else {
-      // 300g < baseGrams <= 500g (had +10)
-      ratePerKg = Math.max(1, (basePrice - 10) / (baseGrams / 1000));
+      // 300 < baseGrams <= 500
+      const raw1Kg = (basePrice / 1.3) / (baseGrams / 1000);
+      ratePerKg = Math.max(10, Math.ceil(raw1Kg / 10) * 10);
     }
   }
 
-  // Proportional rate for target grams
+  // Proportional rate for target grams from 1 kg
   const proportionalPrice = (ratePerKg / 1000) * targetGrams;
 
-  // 1. Target weight <= 300g: doubled, round up to multiple of 10
+  // 1. Target weight <= 300g (e.g. 250 gm, 100 gm): proportional + 50% (no round off to 10)
   if (targetGrams <= 300) {
-    const doubled = proportionalPrice * 2;
-    return Math.max(10, Math.ceil(doubled / 10) * 10);
+    return Math.max(1, Math.round(proportionalPrice * 1.5));
   }
 
-  // 2. Target weight between 300g and 500g (e.g. 500 gm): proportional + 10 rupees, ceiling to multiple of 10
+  // 2. Target weight between 300g and 500g (e.g. 500 gm): proportional + 30% (no round off to 10)
   if (targetGrams <= 500) {
-    const withTen = proportionalPrice + 10;
-    return Math.max(10, Math.ceil(withTen / 10) * 10);
+    return Math.max(1, Math.round(proportionalPrice * 1.3));
   }
 
-  // 3. Target weight > 500g (e.g. 1 kg, 2 kg): exact proportional rate (1 kg = rate1Kg)
+  // 3. Target weight > 500g (e.g. 1 kg, 2 kg): exact proportional rate (no round off to 10)
   return Math.max(1, Math.round(proportionalPrice));
 }
 

@@ -134,14 +134,17 @@ function parseWeightInfo(weightStr) {
 // ── Calculate price based on user-defined weight pricing logic ────────────────
 /**
  * Rule:
- *  - 1 kg base rate = max retail price from API + user input percentage margin
- *  - If weight <= 300g: proportional price is doubled, rounded up to next multiple of 10
- *  - If weight between 300g and 500g (e.g. 500 gm): proportional price + 10 rupees, rounded up to next multiple of 10
- *  - If weight > 500g (e.g. 1 kg, 2 kg): standard proportional price (rate1Kg) without extra 10 rupees
+ *  1. 1 kg rate = max retail price from API + user input percentage margin, rounded up to multiple of 10.
+ *  2. Other weights are converted from 1 kg rate WITHOUT round off to 10:
+ *     - Weight <= 300g (e.g. 250 gm, 100 gm): calculated proportional + 50% (proportional * 1.5)
+ *     - Weight 300g to 500g (e.g. 500 gm): calculated proportional + 30% (proportional * 1.3)
+ *     - Weight > 500g (e.g. 1 kg, 2 kg): exact proportional from 1 kg rate
  */
 function computePriceForWeight(maxRetailPerKg, marginPct, weightInfo) {
   const pct = parseFloat(marginPct) || 0;
-  const rate1Kg = maxRetailPerKg + (maxRetailPerKg * pct / 100);
+  const raw1Kg = maxRetailPerKg + (maxRetailPerKg * pct / 100);
+  // 1 kg is rounded up to next multiple of 10
+  const rate1Kg = Math.max(10, Math.ceil(raw1Kg / 10) * 10);
 
   // Piece-based items (e.g. 1 pc, 2 pcs)
   if (!weightInfo.grams || weightInfo.grams === 0) {
@@ -152,19 +155,17 @@ function computePriceForWeight(maxRetailPerKg, marginPct, weightInfo) {
   const grams = weightInfo.grams;
   const proportional = (rate1Kg / 1000) * grams;
 
-  // 1. Less than or equal to 300 grams (e.g. 100g, 250g) -> doubled, ceiling to multiple of 10
+  // 1. Less than or equal to 300 grams (e.g. 250 gm, 100 gm) -> proportional + 50% (no round off to 10)
   if (grams <= 300) {
-    const doubled = proportional * 2;
-    return Math.max(10, Math.ceil(doubled / 10) * 10);
+    return Math.max(1, Math.round(proportional * 1.5));
   }
 
-  // 2. Between 300 grams and 500 grams (e.g. 500 gm) -> increase 10 rupees, ceiling to multiple of 10
+  // 2. Between 300 grams and 500 grams (e.g. 500 gm) -> proportional + 30% (no round off to 10)
   if (grams <= 500) {
-    const withTen = proportional + 10;
-    return Math.max(10, Math.ceil(withTen / 10) * 10);
+    return Math.max(1, Math.round(proportional * 1.3));
   }
 
-  // 3. More than 500 grams (e.g. 1 kg, 2 kg) -> standard proportional rate (1 kg = rate1Kg)
+  // 3. More than 500 grams (e.g. 1 kg, 2 kg) -> exact proportional from 1 kg (no round off to 10)
   return Math.max(1, Math.round(proportional));
 }
 
@@ -258,8 +259,9 @@ export async function syncPricesFromMandi(instantMargin = 0, morningMargin = 0) 
       const priceInstant = computePriceForWeight(maxRetailPerKg, instantMargin, weightInfo);
       const priceMorning = computePriceForWeight(maxRetailPerKg, morningMargin, weightInfo);
 
-      // 1kg rate for reference and variant calculation
-      const rate1KgInstant = maxRetailPerKg + (maxRetailPerKg * (parseFloat(instantMargin) || 0) / 100);
+      // 1kg rate for reference and variant calculation (rounded off to multiple of 10)
+      const raw1KgInstant = maxRetailPerKg + (maxRetailPerKg * (parseFloat(instantMargin) || 0) / 100);
+      const rate1KgInstant = Math.max(10, Math.ceil(raw1KgInstant / 10) * 10);
 
       // MRP / oldPrice: mark up over instant price
       const isUnder500g = weightInfo.grams <= 500;
